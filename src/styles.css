@@ -425,3 +425,12 @@ h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.01em
   .two-col { grid-template-columns: 1fr; }
   .navbar-links { display: none; }
 }
+.auth-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+}
