@@ -24,6 +24,7 @@ export default function Upload() {
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState([])
+  const [fileError, setFileError] = useState(null)
   const [bulkProjectId, setBulkProjectId] = useState('')
   const [bulkMessage, setBulkMessage] = useState(null)
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -98,14 +99,61 @@ export default function Upload() {
 
   function handleFile(e) {
     const f = e.target.files[0]
+    setFileError(null)
+    setPreview([])
     if (!f) return
+
+    const validExtensions = ['.xlsx', '.xls', '.csv']
+    const hasValidExtension = validExtensions.some((ext) => f.name.toLowerCase().endsWith(ext))
+    if (!hasValidExtension) {
+      setFileError('Unsupported file type. Please upload a .xlsx, .xls, or .csv file.')
+      setFile(null)
+      return
+    }
+
+    if (f.size === 0) {
+      setFileError('This file appears to be empty.')
+      setFile(null)
+      return
+    }
+
     setFile(f)
     const reader = new FileReader()
+    reader.onerror = () => {
+      setFileError('Could not read this file. It may be corrupted — try re-exporting it and uploading again.')
+      setFile(null)
+    }
     reader.onload = (evt) => {
-      const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: true })
-      const sheet = wb.Sheets[wb.SheetNames[0]]
-      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-      setPreview(json.slice(0, 5))
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: true })
+        if (!wb.SheetNames || wb.SheetNames.length === 0) {
+          setFileError('No sheets found in this file.')
+          setFile(null)
+          return
+        }
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+        if (json.length === 0) {
+          setFileError('This file has no data rows.')
+          setFile(null)
+          return
+        }
+
+        const firstRow = json[0]
+        const hasUidColumn = 'UID' in firstRow || 'uid' in firstRow
+        const hasStartColumn = 'Start Time' in firstRow || 'start_time' in firstRow
+        if (!hasUidColumn || !hasStartColumn) {
+          setFileError('Missing required columns. Your file must include at least "UID" and "Start Time" columns.')
+          setFile(null)
+          return
+        }
+
+        setPreview(json.slice(0, 5))
+      } catch (err) {
+        setFileError('Could not parse this file. Make sure it is a valid Excel (.xlsx) or CSV file, not corrupted or password-protected.')
+        setFile(null)
+      }
     }
     reader.readAsBinaryString(f)
   }
@@ -119,54 +167,98 @@ export default function Upload() {
     setBulkMessage(null)
 
     const reader = new FileReader()
-    reader.onload = async (evt) => {
-      const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: true })
-      const sheet = wb.Sheets[wb.SheetNames[0]]
-      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-
-      const payload = json.map((row) => ({
-        project_id: bulkProjectId,
-        uid: String(row.UID || row.uid || '').trim(),
-        start_time: row['Start Time'] || row.start_time,
-        end_time: row['End Time'] || row.end_time || null,
-        country: row.Country || row.country || '',
-        screener_pass: String(row['Screener Pass'] ?? row.screener_pass ?? 'true').toLowerCase() !== 'no' && String(row['Screener Pass'] ?? row.screener_pass ?? 'true').toLowerCase() !== 'false',
-        quota_status: row['Quota Status'] || row.quota_status || 'Open',
-        completed: ['yes', 'true', true].includes(String(row['Survey Completed'] ?? row.completed ?? '').toLowerCase()),
-        created_by: user.id,
-      })).filter((r) => r.uid && r.start_time)
-
-      const seen = new Set()
-      const deduped = []
-      const skippedInFile = []
-      for (const row of payload) {
-        const key = `${row.project_id}::${row.uid}`
-        if (seen.has(key)) {
-          skippedInFile.push(row.uid)
-        } else {
-          seen.add(key)
-          deduped.push(row)
-        }
-      }
-
-      if (deduped.length === 0) {
-        setBulkMessage({ type: 'error', text: 'No valid rows found. Check column headers: UID, Start Time, End Time, Country, Screener Pass, Quota Status, Survey Completed.' })
-        setBulkBusy(false)
-        return
-      }
-
-      const { error, count } = await supabase.from('responses').upsert(deduped, { onConflict: 'project_id,uid', count: 'exact' })
+    reader.onerror = () => {
       setBulkBusy(false)
-      if (error) {
-        setBulkMessage({ type: 'error', text: error.message })
-      } else {
-        let text = `${deduped.length} respondent rows uploaded to ${bulkProjectId}.`
-        if (skippedInFile.length > 0) {
-          text += ` (${skippedInFile.length} duplicate UID(s) within the file were skipped: ${skippedInFile.slice(0, 5).join(', ')}${skippedInFile.length > 5 ? '…' : ''})`
+      setBulkMessage({ type: 'error', text: 'Could not read the file during upload. Please try again.' })
+    }
+    reader.onload = async (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: true })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+        const invalidRows = []
+        const payload = []
+
+        json.forEach((row, idx) => {
+          const uid = String(row.UID || row.uid || '').trim()
+          const startTimeRaw = row['Start Time'] || row.start_time
+          const rowNum = idx + 2 // +2 accounts for header row + 0-index
+
+          if (!uid) {
+            invalidRows.push(`Row ${rowNum}: missing UID`)
+            return
+          }
+          if (!startTimeRaw) {
+            invalidRows.push(`Row ${rowNum}: missing Start Time`)
+            return
+          }
+          const startDate = new Date(startTimeRaw)
+          if (isNaN(startDate.getTime())) {
+            invalidRows.push(`Row ${rowNum}: invalid Start Time format`)
+            return
+          }
+          const endTimeRaw = row['End Time'] || row.end_time || null
+          if (endTimeRaw) {
+            const endDate = new Date(endTimeRaw)
+            if (!isNaN(endDate.getTime()) && endDate < startDate) {
+              invalidRows.push(`Row ${rowNum}: End Time is before Start Time`)
+              return
+            }
+          }
+
+          payload.push({
+            project_id: bulkProjectId,
+            uid,
+            start_time: startTimeRaw,
+            end_time: endTimeRaw,
+            country: row.Country || row.country || '',
+            screener_pass: String(row['Screener Pass'] ?? row.screener_pass ?? 'true').toLowerCase() !== 'no' && String(row['Screener Pass'] ?? row.screener_pass ?? 'true').toLowerCase() !== 'false',
+            quota_status: row['Quota Status'] || row.quota_status || 'Open',
+            completed: ['yes', 'true', true].includes(String(row['Survey Completed'] ?? row.completed ?? '').toLowerCase()),
+            created_by: user.id,
+          })
+        })
+
+        const seen = new Set()
+        const deduped = []
+        const skippedInFile = []
+        for (const row of payload) {
+          const key = `${row.project_id}::${row.uid}`
+          if (seen.has(key)) {
+            skippedInFile.push(row.uid)
+          } else {
+            seen.add(key)
+            deduped.push(row)
+          }
         }
-        setBulkMessage({ type: 'success', text })
-        setFile(null)
-        setPreview([])
+
+        if (deduped.length === 0) {
+          const reason = invalidRows.length > 0
+            ? `All rows were invalid. First issues: ${invalidRows.slice(0, 5).join('; ')}`
+            : 'No valid rows found. Check column headers: UID, Start Time, End Time, Country, Screener Pass, Quota Status, Survey Completed.'
+          setBulkMessage({ type: 'error', text: reason })
+          setBulkBusy(false)
+          return
+        }
+
+        const { error } = await supabase.from('responses').upsert(deduped, { onConflict: 'project_id,uid', count: 'exact' })
+        setBulkBusy(false)
+        if (error) {
+          setBulkMessage({ type: 'error', text: error.message })
+        } else {
+          let text = `${deduped.length} respondent rows uploaded to ${bulkProjectId}.`
+          const problems = []
+          if (skippedInFile.length > 0) problems.push(`${skippedInFile.length} duplicate UID(s) within the file skipped`)
+          if (invalidRows.length > 0) problems.push(`${invalidRows.length} row(s) skipped due to missing/invalid data`)
+          if (problems.length > 0) text += ` (${problems.join('; ')}.)`
+          setBulkMessage({ type: invalidRows.length > 0 || skippedInFile.length > 0 ? 'warning' : 'success', text })
+          setFile(null)
+          setPreview([])
+        }
+      } catch (err) {
+        setBulkBusy(false)
+        setBulkMessage({ type: 'error', text: 'Could not process this file. It may be corrupted or in an unsupported format.' })
       }
     }
     reader.readAsBinaryString(file)
@@ -238,6 +330,8 @@ export default function Upload() {
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} />
           </label>
 
+          {fileError && <div className="auth-error" style={{ marginTop: 8 }}>{fileError}</div>}
+
           {preview.length > 0 && (
             <div className="table-wrap" style={{ marginTop: 12 }}>
               <table className="data-table small">
@@ -254,8 +348,12 @@ export default function Upload() {
             </div>
           )}
 
-          {bulkMessage && <div className={bulkMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{bulkMessage.text}</div>}
-          <button className="btn-primary" onClick={handleBulkUpload} disabled={bulkBusy} style={{ marginTop: 12 }}>
+          {bulkMessage && (
+            <div className={bulkMessage.type === 'error' ? 'auth-error' : bulkMessage.type === 'warning' ? 'auth-warning' : 'auth-success'}>
+              {bulkMessage.text}
+            </div>
+          )}
+          <button className="btn-primary" onClick={handleBulkUpload} disabled={bulkBusy || !file} style={{ marginTop: 12 }}>
             {bulkBusy ? 'Uploading…' : 'Upload All Rows'}
           </button>
         </div>
