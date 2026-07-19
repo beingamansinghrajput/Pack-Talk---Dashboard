@@ -57,7 +57,6 @@ export default function Upload() {
 
     setBusy(true)
 
-    // Duplicate check: same UID already logged for this project
     const { data: existing, error: checkError } = await supabase
       .from('responses')
       .select('id')
@@ -137,7 +136,6 @@ export default function Upload() {
         created_by: user.id,
       })).filter((r) => r.uid && r.start_time)
 
-      // Remove duplicate UIDs within the same file upload
       const seen = new Set()
       const deduped = []
       const skippedInFile = []
@@ -150,3 +148,119 @@ export default function Upload() {
           deduped.push(row)
         }
       }
+
+      if (deduped.length === 0) {
+        setBulkMessage({ type: 'error', text: 'No valid rows found. Check column headers: UID, Start Time, End Time, Country, Screener Pass, Quota Status, Survey Completed.' })
+        setBulkBusy(false)
+        return
+      }
+
+      const { error, count } = await supabase.from('responses').upsert(deduped, { onConflict: 'project_id,uid', count: 'exact' })
+      setBulkBusy(false)
+      if (error) {
+        setBulkMessage({ type: 'error', text: error.message })
+      } else {
+        let text = `${deduped.length} respondent rows uploaded to ${bulkProjectId}.`
+        if (skippedInFile.length > 0) {
+          text += ` (${skippedInFile.length} duplicate UID(s) within the file were skipped: ${skippedInFile.slice(0, 5).join(', ')}${skippedInFile.length > 5 ? '…' : ''})`
+        }
+        setBulkMessage({ type: 'success', text })
+        setFile(null)
+        setPreview([])
+      }
+    }
+    reader.readAsBinaryString(file)
+  }
+
+  return (
+    <div className="page">
+      <h1>Punch In Survey Data</h1>
+      <p className="page-sub">Log respondents one at a time, or upload a full Excel export at once.</p>
+
+      <Reveal>
+      <div className="two-col">
+        <div className="card">
+          <h2 className="card-title">Manual Entry</h2>
+          <form onSubmit={handleManualSubmit} className="form-grid">
+            <label>Project
+              <select required value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
+                <option value="">Select project…</option>
+                {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_id} — {p.project_name}</option>)}
+              </select>
+            </label>
+            <label>Respondent UID
+              <input required value={form.uid} onChange={(e) => setForm({ ...form, uid: e.target.value })} placeholder="e.g. xhgfdrftyguhiPV03" />
+            </label>
+            <label>Start Time
+              <input required type="datetime-local" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            </label>
+            <label>End Time
+              <input type="datetime-local" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+            </label>
+            <label>Country
+              <input required value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="e.g. Netherlands" />
+            </label>
+            <label>Screener Passed?
+              <select value={form.screener_pass} onChange={(e) => setForm({ ...form, screener_pass: e.target.value })}>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </label>
+            <label>Quota Status
+              <select value={form.quota_status} onChange={(e) => setForm({ ...form, quota_status: e.target.value })}>
+                <option value="Open">Open</option>
+                <option value="Full">Full</option>
+              </select>
+            </label>
+            <label>Survey Completed?
+              <select value={form.completed} onChange={(e) => setForm({ ...form, completed: e.target.value })}>
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </label>
+            {message && <div className={message.type === 'error' ? 'auth-error' : 'auth-success'}>{message.text}</div>}
+            <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Punch In'}</button>
+          </form>
+        </div>
+
+        <div className="card">
+          <h2 className="card-title">Bulk Excel Upload</h2>
+          <p className="card-hint">
+            Expected columns: <code>UID, Start Time, End Time, Country, Screener Pass, Quota Status, Survey Completed</code>
+          </p>
+          <label className="field-label">Target Project
+            <select value={bulkProjectId} onChange={(e) => setBulkProjectId(e.target.value)}>
+              <option value="">Select project…</option>
+              {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_id} — {p.project_name}</option>)}
+            </select>
+          </label>
+          <label className="field-label">Excel File (.xlsx / .csv)
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} />
+          </label>
+
+          {preview.length > 0 && (
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table className="data-table small">
+                <thead>
+                  <tr>{Object.keys(preview[0]).map((k) => <th key={k}>{k}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {preview.map((row, i) => (
+                    <tr key={i}>{Object.values(row).map((v, j) => <td key={j}>{String(v)}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="card-hint">Showing first {preview.length} rows as a preview.</p>
+            </div>
+          )}
+
+          {bulkMessage && <div className={bulkMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{bulkMessage.text}</div>}
+          <button className="btn-primary" onClick={handleBulkUpload} disabled={bulkBusy} style={{ marginTop: 12 }}>
+            {bulkBusy ? 'Uploading…' : 'Upload All Rows'}
+          </button>
+        </div>
+      </div>
+      </Reveal>
+    </div>
+  )
+}
