@@ -32,6 +32,12 @@ export default function Team() {
     load()
   }
 
+  async function updatePrefix(id, uid_prefix) {
+    const cleaned = uid_prefix.trim().toUpperCase()
+    await supabase.from('profiles').update({ uid_prefix: cleaned || null }).eq('id', id)
+    load()
+  }
+
   async function createTeam(e) {
     e.preventDefault()
     if (!newTeamName.trim()) return
@@ -84,13 +90,16 @@ export default function Team() {
       <Reveal>
       <div className="card">
         <h2 className="card-title">Members</h2>
+        <p className="card-hint">
+          UID Prefix: the capital letters at the end of a respondent's UID (before the number) that identify who collected it — e.g. UID "xyzAS01" has prefix "AS".
+        </p>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Role</th><th>Team</th><th>Joined</th></tr>
+              <tr><th>Name</th><th>Email</th><th>Role</th><th>Team</th><th>UID Prefix</th><th>Joined</th></tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={5} className="empty-row">Loading…</td></tr>}
+              {loading && <tr><td colSpan={6} className="empty-row">Loading…</td></tr>}
               {!loading && members.map((m) => (
                 <tr key={m.id}>
                   <td>{m.full_name || '—'}</td>
@@ -114,6 +123,19 @@ export default function Team() {
                       </select>
                     ) : (
                       teams.find((t) => t.id === m.team_id)?.name || '—'
+                    )}
+                  </td>
+                  <td>
+                    {isAdmin ? (
+                      <input
+                        defaultValue={m.uid_prefix || ''}
+                        onBlur={(e) => updatePrefix(m.id, e.target.value)}
+                        placeholder="e.g. AS"
+                        style={{ width: 70, textTransform: 'uppercase' }}
+                        maxLength={6}
+                      />
+                    ) : (
+                      m.uid_prefix || '—'
                     )}
                   </td>
                   <td>{new Date(m.created_at).toLocaleDateString()}</td>
