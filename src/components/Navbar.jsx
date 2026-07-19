@@ -1,36 +1,93 @@
-import { Link, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import logo from '../assets/logo.png'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import Navbar from './components/Navbar'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import ProjectDetail from './pages/ProjectDetail'
+import ProjectsAdmin from './pages/ProjectsAdmin'
+import Team from './pages/Team'
+import Upload from './pages/Upload'
+import Earnings from './pages/Earnings'
 
-export default function Navbar() {
-  const { profile, isAdmin, signOut } = useAuth()
-  const location = useLocation()
+function ProtectedRoute({ children }) {
+  const { session, loading } = useAuth()
+  if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading...</div>
+  if (!session) return <Navigate to="/login" replace />
+  return children
+}
 
-  const isActive = (path) => location.pathname === path
+function AppRoutes() {
+  const { session, loading } = useAuth()
+
+  if (loading) {
+    return <div style={{ padding: 40, color: '#fff' }}>Loading...</div>
+  }
 
   return (
-    <nav className="navbar">
-      <div className="navbar-brand">
-        <img src={logo} alt="PackTalk" className="brand-logo" />
-        <span>PackTalk</span>
-      </div>
-      <div className="navbar-links">
-        <Link className={isActive('/') ? 'active' : ''} to="/">Dashboard</Link>
-        <Link className={isActive('/upload') ? 'active' : ''} to="/upload">Punch In Data</Link>
-        {isAdmin && (
-          <Link className={isActive('/projects') ? 'active' : ''} to="/projects">Manage Projects</Link>
-        )}
-        {isAdmin && (
-          <Link className={isActive('/team') ? 'active' : ''} to="/team">Team</Link>
-        )}
-      </div>
-      <div className="navbar-user">
-        <div className="user-badge">
-          <span className="user-name">{profile?.full_name || profile?.email}</span>
-          <span className="user-role">{profile?.role}</span>
-        </div>
-        <button className="btn-ghost" onClick={signOut}>Sign out</button>
-      </div>
-    </nav>
+    <BrowserRouter>
+      {session && <Navbar />}
+      <Routes>
+        <Route
+          path="/login"
+          element={session ? <Navigate to="/" replace /> : <Login />}
+        />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/project/:id"
+          element={
+            <ProtectedRoute>
+              <ProjectDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects"
+          element={
+            <ProtectedRoute>
+              <ProjectsAdmin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <ProtectedRoute>
+              <Team />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/upload"
+          element={
+            <ProtectedRoute>
+              <Upload />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/earnings"
+          element={
+            <ProtectedRoute>
+              <Earnings />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }
