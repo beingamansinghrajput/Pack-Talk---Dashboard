@@ -7,6 +7,7 @@ import ProjectDetail from './pages/ProjectDetail'
 import ProjectsAdmin from './pages/ProjectsAdmin'
 import Team from './pages/Team'
 import Upload from './pages/Upload'
+import Earnings from './pages/Earnings'
 
 function ProtectedRoute({ children }) {
   const { session, loading } = useAuth()
@@ -67,6 +68,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Upload />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/earnings"
+          element={
+            <ProtectedRoute>
+              <Earnings />
             </ProtectedRoute>
           }
         />
