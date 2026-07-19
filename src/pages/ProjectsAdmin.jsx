@@ -108,4 +108,108 @@ export default function ProjectsAdmin() {
             <input type="number" value={form.loi} onChange={(e) => setForm({ ...form, loi: e.target.value })} />
           </label>
           <label>IR (%)
-            <input type="number" value={form.ir} onChange={(e) => setForm({ ...form, ir:
+            <input type="number" value={form.ir} onChange={(e) => setForm({ ...form, ir: e.target.value })} />
+          </label>
+          <label>Launch Date
+            <input type="date" value={form.launch_date} onChange={(e) => setForm({ ...form, launch_date: e.target.value })} />
+          </label>
+          {message && <div className={message.type === 'error' ? 'auth-error' : 'auth-success'}>{message.text}</div>}
+          <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create Project'}</button>
+        </form>
+      </div>
+      </Reveal>
+
+      <Reveal delay={80}>
+      <div className="card">
+        <h2 className="card-title">All Projects</h2>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr><th>Project ID</th><th>Name</th><th>Country</th><th>Target</th><th>Status</th><th>Teams with Access</th><th></th></tr>
+            </thead>
+            <tbody>
+              {projects.map((p) => {
+                const linkedTeamIds = teamProjects.filter((tp) => tp.project_id === p.project_id).map((tp) => tp.team_id)
+                return (
+                  <tr key={p.project_id}>
+                    <td>{p.project_id}</td>
+                    <td>{p.project_name}</td>
+                    <td>{p.country}</td>
+                    <td>{p.target}</td>
+                    <td><span className={`badge ${p.status === 'Live' ? 'badge-green' : 'badge-gray'}`}>{p.status}</span></td>
+                    <td>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {teams.length === 0 && <span className="card-hint">No teams yet</span>}
+                        {teams.map((t) => {
+                          const linked = linkedTeamIds.includes(t.id)
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => toggleTeamAccess(p.project_id, t.id, linked)}
+                              className={linked ? 'badge badge-green' : 'badge badge-gray'}
+                              style={{ cursor: 'pointer', border: 'none' }}
+                              title={linked ? 'Click to remove access' : 'Click to grant access'}
+                            >
+                              {t.name} {linked ? '✓' : '+'}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </td>
+                    <td style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <select value={p.status} onChange={(e) => updateStatus(p.project_id, e.target.value)}>
+                        <option value="Live">Live</option>
+                        <option value="Paused">Paused</option>
+                        <option value="Closed">Closed</option>
+                      </select>
+                      <button
+                        className="btn-ghost"
+                        onClick={() => setRatesProjectId(ratesProjectId === p.project_id ? null : p.project_id)}
+                      >
+                        {ratesProjectId === p.project_id ? 'Hide Rates' : 'Manage Rates'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {ratesProjectId && (
+          <div className="card" style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)' }}>
+            <h2 className="card-title">Pay Rates — {ratesProjectId}</h2>
+            <p className="card-hint">Set how much each person earns per Completed respondent on this project.</p>
+            <div className="table-wrap">
+              <table className="data-table small">
+                <thead>
+                  <tr><th>Name</th><th>Email</th><th>Rate per Completed (₹)</th></tr>
+                </thead>
+                <tbody>
+                  {members.filter((m) => m.role !== 'admin').map((m) => (
+                    <tr key={m.id}>
+                      <td>{m.full_name || '—'}</td>
+                      <td>{m.email}</td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          defaultValue={getRate(m.id, ratesProjectId)}
+                          onBlur={(e) => updateRate(m.id, ratesProjectId, e.target.value)}
+                          style={{ width: 100 }}
+                          placeholder="0"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+      </Reveal>
+    </div>
+  )
+}
