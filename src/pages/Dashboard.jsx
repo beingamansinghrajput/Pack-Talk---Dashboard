@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
 import { handleTiltMove, handleTiltLeave } from '../lib/tilt'
 
@@ -24,37 +25,60 @@ function isThisMonth(dateStr) {
 }
 
 export default function Dashboard() {
+  const { profile, isAdmin } = useAuth()
   const [projects, setProjects] = useState([])
   const [responses, setResponses] = useState([])
+  const [allowedProjectIds, setAllowedProjectIds] = useState(null) // null = no restriction (admin)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    loadAll()
-  }, [])
+    if (profile) loadAll()
+  }, [profile])
 
   async function loadAll() {
     setLoading(true)
+
+    let allowedIds = null
+    if (!isAdmin && profile?.team_id) {
+      const { data: tpData } = await supabase
+        .from('team_projects')
+        .select('project_id')
+        .eq('team_id', profile.team_id)
+      allowedIds = (tpData || []).map((tp) => tp.project_id)
+    } else if (!isAdmin && !profile?.team_id) {
+      // Not on any team yet — sees nothing until assigned
+      allowedIds = []
+    }
+    setAllowedProjectIds(allowedIds)
+
     const [{ data: projData }, { data: respData }] = await Promise.all([
       supabase.from('projects').select('*').order('created_at', { ascending: false }),
       supabase.from('responses').select('project_id, status, start_time, country'),
     ])
-    setProjects(projData || [])
+
+    const visibleProjects = allowedIds === null
+      ? (projData || [])
+      : (projData || []).filter((p) => allowedIds.includes(p.project_id))
+
+    setProjects(visibleProjects)
     setResponses(respData || [])
     setLoading(false)
   }
 
   const todayCounts = useMemo(() => {
     const c = { Completed: 0, Terminated: 0, QuotaFull: 0, Disqualify: 0 }
-    responses.filter((r) => isToday(r.start_time)).forEach((r) => c[r.status]++)
+    const visibleIds = new Set(projects.map((p) => p.project_id))
+    responses.filter((r) => visibleIds.has(r.project_id) && isToday(r.start_time)).forEach((r) => c[r.status]++)
     return c
-  }, [responses])
+  }, [responses, projects])
 
   const monthCounts = useMemo(() => {
     const c = { Completed: 0, Terminated: 0, QuotaFull: 0, Disqualify: 0 }
-    responses.filter((r) => isThisMonth(r.start_time)).forEach((r) => c[r.status]++)
+    const visibleIds = new Set(projects.map((p) => p.project_id))
+    responses.filter((r) => visibleIds.has(r.project_id) && isThisMonth(r.start_time)).forEach((r) => c[r.status]++)
     return c
-  }, [responses])
+  }, [responses, projects])
 
   const projectRows = useMemo(() => {
     return projects
@@ -79,6 +103,12 @@ export default function Dashboard() {
           <p className="page-sub">Live respondent outcomes across every active project</p>
         </div>
       </div>
+
+      {!isAdmin && !profile?.team_id && (
+        <div className="auth-error" style={{ marginBottom: 16 }}>
+          You're not assigned to a team yet. Ask your admin to add you to a team so you can see your projects.
+        </div>
+      )}
 
       <Reveal>
         <section>
