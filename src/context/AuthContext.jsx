@@ -21,7 +21,6 @@ export function AuthProvider({ children }) {
         setLoading(false)
       }
     })
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
@@ -31,7 +30,6 @@ export function AuthProvider({ children }) {
         setLoading(false)
       }
     })
-
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -45,6 +43,12 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }
 
+  async function refreshProfile() {
+    if (session) {
+      await loadProfile(session.user.id)
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     setSession(null)
@@ -52,14 +56,19 @@ export function AuthProvider({ children }) {
   }
 
   const isAdmin = profile?.role === 'admin'
+  const isTeamLead = profile?.role === 'team_lead'
+  const canManageTeam = isAdmin || isTeamLead
 
   const value = {
     session,
     user: session?.user ?? null,
     profile,
     isAdmin,
+    isTeamLead,
+    canManageTeam,
     loading,
     signOut,
+    refreshProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
