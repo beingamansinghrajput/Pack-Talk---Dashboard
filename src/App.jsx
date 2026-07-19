@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
-import ProtectedRoute from './components/ProtectedRoute'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -10,22 +8,15 @@ import ProjectsAdmin from './pages/ProjectsAdmin'
 import Team from './pages/Team'
 import Upload from './pages/Upload'
 
-export default function App() {
-  const [session, setSession] = useState(null)
-  const [loading, setLoading] = useState(true)
+function ProtectedRoute({ children }) {
+  const { session, loading } = useAuth()
+  if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading...</div>
+  if (!session) return <Navigate to="/login" replace />
+  return children
+}
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
-    return () => listener.subscription.unsubscribe()
-  }, [])
+function AppRoutes() {
+  const { session, loading } = useAuth()
 
   if (loading) {
     return <div style={{ padding: 40, color: '#fff' }}>Loading...</div>
@@ -33,7 +24,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {session && <Navbar session={session} />}
+      {session && <Navbar />}
       <Routes>
         <Route
           path="/login"
@@ -42,44 +33,52 @@ export default function App() {
         <Route
           path="/"
           element={
-            <ProtectedRoute session={session}>
-              <Dashboard session={session} />
+            <ProtectedRoute>
+              <Dashboard />
             </ProtectedRoute>
           }
         />
         <Route
           path="/project/:id"
           element={
-            <ProtectedRoute session={session}>
-              <ProjectDetail session={session} />
+            <ProtectedRoute>
+              <ProjectDetail />
             </ProtectedRoute>
           }
         />
         <Route
           path="/projects"
           element={
-            <ProtectedRoute session={session}>
-              <ProjectsAdmin session={session} />
+            <ProtectedRoute>
+              <ProjectsAdmin />
             </ProtectedRoute>
           }
         />
         <Route
           path="/team"
           element={
-            <ProtectedRoute session={session}>
-              <Team session={session} />
+            <ProtectedRoute>
+              <Team />
             </ProtectedRoute>
           }
         />
         <Route
           path="/upload"
           element={
-            <ProtectedRoute session={session}>
-              <Upload session={session} />
+            <ProtectedRoute>
+              <Upload />
             </ProtectedRoute>
           }
         />
       </Routes>
     </BrowserRouter>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }
