@@ -3,8 +3,14 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
 
+function extractPrefix(uid) {
+  if (!uid) return null
+  const match = uid.match(/([A-Z]+)(\d+)$/)
+  return match ? match[1] : null
+}
+
 export default function Earnings() {
-  const { profile, user, isAdmin, canManageTeam } = useAuth()
+  const { profile, isAdmin, canManageTeam } = useAuth()
   const [members, setMembers] = useState([])
   const [teams, setTeams] = useState([])
   const [projects, setProjects] = useState([])
@@ -28,7 +34,7 @@ export default function Earnings() {
 
     const { data: respData } = await supabase
       .from('responses')
-      .select('project_id, status, created_by')
+      .select('project_id, status, uid')
       .eq('status', 'Completed')
 
     setMembers(memberData || [])
@@ -41,14 +47,13 @@ export default function Earnings() {
 
   const projectName = (id) => projects.find((p) => p.project_id === id)?.project_name || id
 
-  // Build earnings breakdown: for each person, for each project, their completed count + rate + total
   const earningsByPerson = useMemo(() => {
     const targetMembers = canManageTeam
-      ? members.filter((m) => m.role !== 'admin' && (!teamFilter || m.team_id === teamFilter))
-      : members.filter((m) => m.id === user?.id)
+      ? members.filter((m) => m.role !== 'admin' && m.uid_prefix && (!teamFilter || m.team_id === teamFilter))
+      : members.filter((m) => m.id === profile?.id && m.uid_prefix)
 
     return targetMembers.map((m) => {
-      const myCompleted = responses.filter((r) => r.created_by === m.id)
+      const myCompleted = responses.filter((r) => extractPrefix(r.uid) === m.uid_prefix)
       const byProject = {}
       myCompleted.forEach((r) => {
         byProject[r.project_id] = (byProject[r.project_id] || 0) + 1
@@ -63,7 +68,12 @@ export default function Earnings() {
 
       return { member: m, rows, grandTotal }
     })
-  }, [members, responses, rates, teamFilter, canManageTeam, user])
+  }, [members, responses, rates, teamFilter, canManageTeam, profile])
+
+  const noPrefixMembers = useMemo(() => {
+    if (!canManageTeam) return []
+    return members.filter((m) => m.role !== 'admin' && !m.uid_prefix)
+  }, [members, canManageTeam])
 
   if (loading) return <div className="page-loading">Loading earnings…</div>
 
@@ -72,9 +82,15 @@ export default function Earnings() {
       <h1>Earnings</h1>
       <p className="page-sub">
         {canManageTeam
-          ? 'Completed respondents × pay rate, per person, per project.'
+          ? 'Completed respondents (matched by UID prefix) × pay rate, per person, per project.'
           : 'Your completed respondents and earnings across all projects.'}
       </p>
+
+      {!isAdmin && !canManageTeam && !profile?.uid_prefix && (
+        <div className="auth-error" style={{ marginBottom: 16 }}>
+          You don't have a UID Prefix assigned yet — ask your admin to set one on the Team page so your earnings can be tracked.
+        </div>
+      )}
 
       {canManageTeam && (
         <Reveal>
@@ -89,10 +105,18 @@ export default function Earnings() {
         </Reveal>
       )}
 
+      {canManageTeam && noPrefixMembers.length > 0 && (
+        <Reveal>
+          <div className="auth-error" style={{ marginBottom: 16 }}>
+            {noPrefixMembers.length} member(s) don't have a UID Prefix set yet, so their earnings can't be calculated: {noPrefixMembers.map((m) => m.full_name || m.email).join(', ')}. Set it on the Team page.
+          </div>
+        </Reveal>
+      )}
+
       {earningsByPerson.length === 0 && (
         <Reveal>
           <div className="card">
-            <p className="empty-row">No earnings data yet — either no one has been assigned rates, or no Completed respondents have been logged.</p>
+            <p className="empty-row">No earnings data yet — either no one has a UID Prefix set, no rates assigned, or no Completed respondents match yet.</p>
           </div>
         </Reveal>
       )}
@@ -101,13 +125,13 @@ export default function Earnings() {
         <Reveal key={member.id} delay={idx * 60}>
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h2 className="card-title">{member.full_name || member.email}</h2>
+              <h2 className="card-title">{member.full_name || member.email} <span className="card-hint">({member.uid_prefix})</span></h2>
               <span className="badge badge-green" style={{ fontSize: 16 }}>
                 ₹{grandTotal.toLocaleString('en-IN')}
               </span>
             </div>
             {rows.length === 0 ? (
-              <p className="card-hint">No completed respondents logged yet.</p>
+              <p className="card-hint">No completed respondents matched yet.</p>
             ) : (
               <div className="table-wrap">
                 <table className="data-table small">
