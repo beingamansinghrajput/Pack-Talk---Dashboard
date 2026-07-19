@@ -8,15 +8,30 @@ const EMPTY = { project_id: '', project_name: '', target: '', loi: '', ir: '', c
 export default function ProjectsAdmin() {
   const { user } = useAuth()
   const [projects, setProjects] = useState([])
+  const [teams, setTeams] = useState([])
+  const [teamProjects, setTeamProjects] = useState([])
+  const [members, setMembers] = useState([])
+  const [rates, setRates] = useState([])
   const [form, setForm] = useState(EMPTY)
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [ratesProjectId, setRatesProjectId] = useState(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
-    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
-    setProjects(data || [])
+    const [{ data: projectData }, { data: teamData }, { data: tpData }, { data: memberData }, { data: rateData }] = await Promise.all([
+      supabase.from('projects').select('*').order('created_at', { ascending: false }),
+      supabase.from('teams').select('*').order('name'),
+      supabase.from('team_projects').select('*'),
+      supabase.from('profiles').select('*'),
+      supabase.from('rates').select('*'),
+    ])
+    setProjects(projectData || [])
+    setTeams(teamData || [])
+    setTeamProjects(tpData || [])
+    setMembers(memberData || [])
+    setRates(rateData || [])
   }
 
   async function handleSubmit(e) {
@@ -46,6 +61,28 @@ export default function ProjectsAdmin() {
     load()
   }
 
+  async function toggleTeamAccess(project_id, team_id, currentlyLinked) {
+    if (currentlyLinked) {
+      await supabase.from('team_projects').delete().eq('project_id', project_id).eq('team_id', team_id)
+    } else {
+      await supabase.from('team_projects').insert({ project_id, team_id })
+    }
+    load()
+  }
+
+  function getRate(userId, project_id) {
+    return rates.find((r) => r.user_id === userId && r.project_id === project_id)?.amount ?? ''
+  }
+
+  async function updateRate(userId, project_id, amount) {
+    const numAmount = Number(amount) || 0
+    await supabase.from('rates').upsert(
+      { user_id: userId, project_id, amount: numAmount, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,project_id' }
+    )
+    load()
+  }
+
   return (
     <div className="page">
       <h1>Manage Projects</h1>
@@ -71,47 +108,4 @@ export default function ProjectsAdmin() {
             <input type="number" value={form.loi} onChange={(e) => setForm({ ...form, loi: e.target.value })} />
           </label>
           <label>IR (%)
-            <input type="number" value={form.ir} onChange={(e) => setForm({ ...form, ir: e.target.value })} />
-          </label>
-          <label>Launch Date
-            <input type="date" value={form.launch_date} onChange={(e) => setForm({ ...form, launch_date: e.target.value })} />
-          </label>
-          {message && <div className={message.type === 'error' ? 'auth-error' : 'auth-success'}>{message.text}</div>}
-          <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create Project'}</button>
-        </form>
-      </div>
-      </Reveal>
-
-      <Reveal delay={80}>
-      <div className="card">
-        <h2 className="card-title">All Projects</h2>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr><th>Project ID</th><th>Name</th><th>Country</th><th>Target</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              {projects.map((p) => (
-                <tr key={p.project_id}>
-                  <td>{p.project_id}</td>
-                  <td>{p.project_name}</td>
-                  <td>{p.country}</td>
-                  <td>{p.target}</td>
-                  <td><span className={`badge ${p.status === 'Live' ? 'badge-green' : 'badge-gray'}`}>{p.status}</span></td>
-                  <td>
-                    <select value={p.status} onChange={(e) => updateStatus(p.project_id, e.target.value)}>
-                      <option value="Live">Live</option>
-                      <option value="Paused">Paused</option>
-                      <option value="Closed">Closed</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      </Reveal>
-    </div>
-  )
-}
+            <input type="number" value={form.ir} onChange={(e) => setForm({ ...form, ir:
