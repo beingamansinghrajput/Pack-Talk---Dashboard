@@ -5,7 +5,7 @@ import Reveal from '../components/Reveal'
 
 function extractPrefix(uid) {
   if (!uid) return null
-  const match = uid.match(/([A-Z]+)(\d+)$/)
+  const match = uid.match(/([A-Z]+\d+)$/)
   return match ? match[1] : null
 }
 
@@ -82,13 +82,13 @@ export default function Earnings() {
       <h1>Earnings</h1>
       <p className="page-sub">
         {canManageTeam
-          ? 'Completed respondents (matched by UID prefix) × pay rate, per person, per project.'
+          ? 'Completed respondents (matched by UID code) × pay rate, per person, per project.'
           : 'Your completed respondents and earnings across all projects.'}
       </p>
 
       {!isAdmin && !canManageTeam && !profile?.uid_prefix && (
         <div className="auth-error" style={{ marginBottom: 16 }}>
-          You don't have a UID Prefix assigned yet — ask your admin to set one on the Team page so your earnings can be tracked.
+          You don't have a UID code assigned yet — ask your admin to set one on the Team page so your earnings can be tracked.
         </div>
       )}
 
@@ -108,7 +108,7 @@ export default function Earnings() {
       {canManageTeam && noPrefixMembers.length > 0 && (
         <Reveal>
           <div className="auth-error" style={{ marginBottom: 16 }}>
-            {noPrefixMembers.length} member(s) don't have a UID Prefix set yet, so their earnings can't be calculated: {noPrefixMembers.map((m) => m.full_name || m.email).join(', ')}. Set it on the Team page.
+            {noPrefixMembers.length} member(s) don't have a UID code set yet, so their earnings can't be calculated: {noPrefixMembers.map((m) => m.full_name || m.email).join(', ')}. Set it on the Team page.
           </div>
         </Reveal>
       )}
@@ -116,7 +116,7 @@ export default function Earnings() {
       {earningsByPerson.length === 0 && (
         <Reveal>
           <div className="card">
-            <p className="empty-row">No earnings data yet — either no one has a UID Prefix set, no rates assigned, or no Completed respondents match yet.</p>
+            <p className="empty-row">No earnings data yet — either no one has a UID code set, no rates assigned, or no Completed respondents match yet.</p>
           </div>
         </Reveal>
       )}
