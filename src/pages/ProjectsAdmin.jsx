@@ -94,10 +94,10 @@ export default function ProjectsAdmin() {
 
   function getTrackingLinks(project_id) {
     return [
-      { label: 'Complete', status: 'complete', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=complete` },
-      { label: 'Terminate', status: 'terminate', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=terminate` },
-      { label: 'Quota Full', status: 'quotafull', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=quotafull` },
-      { label: 'Security', status: 'security', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=security` },
+      { label: 'Complete', status: 'complete', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=complete&country=[COUNTRY]&age_band=[AGE_BAND]` },
+      { label: 'Terminate', status: 'terminate', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=terminate&country=[COUNTRY]&age_band=[AGE_BAND]` },
+      { label: 'Quota Full', status: 'quotafull', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=quotafull&country=[COUNTRY]&age_band=[AGE_BAND]` },
+      { label: 'Security', status: 'security', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=security&country=[COUNTRY]&age_band=[AGE_BAND]` },
     ]
   }
 
@@ -246,7 +246,7 @@ export default function ProjectsAdmin() {
           <div className="card" style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)' }}>
             <h2 className="card-title">Tracking Links — {linksProjectId}</h2>
             <p className="card-hint">
-              Replace <code>[UID]</code> in each link with your survey tool's dynamic respondent-ID variable before handing it to a client or embedding it as a redirect URL.
+              Replace <code>[UID]</code>, <code>[COUNTRY]</code>, and <code>[AGE_BAND]</code> in each link with your survey tool's dynamic variables before handing it to a client or embedding it as a redirect URL. Country and age band are optional — they power the quota Done/To-Go tracking.
             </p>
 
             <div style={{ marginTop: 12, marginBottom: 16 }}>
