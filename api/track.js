@@ -13,7 +13,7 @@ const STATUS_MAP = {
 }
 
 export default async function handler(req, res) {
-  const { project, uid, status } = req.query
+  const { project, uid, status, age_band, country } = req.query
 
   if (!project || !uid || !status) {
     return res.status(400).send('Missing required parameters: project, uid, status')
@@ -49,7 +49,8 @@ export default async function handler(req, res) {
     uid: uid,
     start_time: now,
     end_time: now,
-    country: null,
+    country: country || null,
+    age_band: age_band || null,
     screener_pass: mapping.screener_pass,
     quota_status: mapping.quota_status,
     completed: mapping.completed,
