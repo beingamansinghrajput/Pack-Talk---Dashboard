@@ -51,6 +51,8 @@ export default async function handler(req, res) {
     security: 'Security Terminated',
   }[status.toLowerCase()]
 
+  const copyText = `UID / Sting ID\tIP Address\tStatus\n${uid}\t${ip}\t${statusLabel}`
+
   res.setHeader('Content-Type', 'text/html')
   res.status(200).send(`
     <!DOCTYPE html>
@@ -58,22 +60,50 @@ export default async function handler(req, res) {
     <head>
       <title>Survey Response Recorded</title>
       <style>
-        body { font-family: -apple-system, sans-serif; background: #0a0a0f; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .card { background: #16161f; border: 1px solid #2a2a3a; border-radius: 16px; padding: 32px 40px; max-width: 420px; text-align: center; }
-        h1 { font-size: 20px; margin-bottom: 20px; }
-        .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #22222f; font-size: 14px; }
-        .row span:first-child { color: #888; }
-        .status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 600; margin-top: 16px; background: rgba(34,197,94,0.15); color: #22c55e; }
+        body { font-family: -apple-system, sans-serif; background: #0a0a0f; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .card { background: #16161f; border: 1px solid #2a2a3a; border-radius: 16px; padding: 28px 32px; max-width: 720px; width: 100%; }
+        h1 { font-size: 18px; margin: 0 0 20px 0; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th { text-align: left; padding: 10px 14px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #2a2a3a; }
+        td { padding: 14px; font-size: 15px; border-bottom: 1px solid #22222f; font-family: monospace; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 13px; background: rgba(34,197,94,0.15); color: #22c55e; }
+        .status-badge.term { background: rgba(220,38,38,0.15); color: #f87171; }
+        .status-badge.qf { background: rgba(217,119,6,0.15); color: #f59e0b; }
+        .meta { text-align: center; color: #666; font-size: 12px; margin-bottom: 16px; }
+        button { display: block; margin: 0 auto; background: linear-gradient(90deg, #f97316, #a855f7); color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        button:active { transform: scale(0.97); }
+        .copied { color: #22c55e; text-align: center; font-size: 13px; margin-top: 10px; min-height: 16px; }
       </style>
     </head>
     <body>
       <div class="card">
         <h1>Response Recorded</h1>
-        <div class="row"><span>Project ID</span><span>${project}</span></div>
-        <div class="row"><span>UID</span><span>${uid}</span></div>
-        <div class="row"><span>IP Address</span><span>${ip}</span></div>
-        <div class="status">${statusLabel}</div>
+        <div class="meta">Project: ${project}</div>
+        <table>
+          <thead>
+            <tr><th>UID / Sting ID</th><th>IP Address</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${uid}</td>
+              <td>${ip}</td>
+              <td><span class="status-badge ${status.toLowerCase() === 'terminate' || status.toLowerCase() === 'security' ? 'term' : status.toLowerCase() === 'quotafull' ? 'qf' : ''}">${statusLabel}</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <button onclick="copyRow()">Copy for Excel</button>
+        <div class="copied" id="copiedMsg"></div>
       </div>
+      <script>
+        function copyRow() {
+          const text = ${JSON.stringify(copyText)};
+          navigator.clipboard.writeText(text).then(() => {
+            document.getElementById('copiedMsg').textContent = 'Copied! Paste directly into Excel.';
+          }).catch(() => {
+            document.getElementById('copiedMsg').textContent = 'Could not copy automatically — please select and copy manually.';
+          });
+        }
+      </script>
     </body>
     </html>
   `)
