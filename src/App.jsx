@@ -8,21 +8,22 @@ import ProjectsAdmin from './pages/ProjectsAdmin'
 import Team from './pages/Team'
 import Upload from './pages/Upload'
 import Earnings from './pages/Earnings'
-
+import ClientDashboard from './pages/ClientDashboard'
 function ProtectedRoute({ children }) {
   const { session, loading } = useAuth()
   if (loading) return <div style={{ padding: 40, color: '#fff' }}>Loading...</div>
   if (!session) return <Navigate to="/login" replace />
   return children
 }
-
+function HomeRoute() {
+  const { isClient } = useAuth()
+  return isClient ? <ClientDashboard /> : <Dashboard />
+}
 function AppRoutes() {
   const { session, loading } = useAuth()
-
   if (loading) {
     return <div style={{ padding: 40, color: '#fff' }}>Loading...</div>
   }
-
   return (
     <BrowserRouter>
       {session && <Navbar />}
@@ -35,7 +36,7 @@ function AppRoutes() {
           path="/"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <HomeRoute />
             </ProtectedRoute>
           }
         />
@@ -83,7 +84,6 @@ function AppRoutes() {
     </BrowserRouter>
   )
 }
-
 export default function App() {
   return (
     <AuthProvider>
