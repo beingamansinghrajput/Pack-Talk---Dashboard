@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
 
 const EMPTY = { project_id: '', project_name: '', target: '', loi: '', ir: '', country: '', launch_date: '' }
+const TRACK_BASE = 'https://pack-talk-dashboard.vercel.app/api/track'
 
 export default function ProjectsAdmin() {
   const { user } = useAuth()
@@ -16,6 +17,8 @@ export default function ProjectsAdmin() {
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
   const [ratesProjectId, setRatesProjectId] = useState(null)
+  const [linksProjectId, setLinksProjectId] = useState(null)
+  const [copiedKey, setCopiedKey] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -81,6 +84,21 @@ export default function ProjectsAdmin() {
       { onConflict: 'user_id,project_id' }
     )
     load()
+  }
+
+  function getTrackingLinks(project_id) {
+    return [
+      { label: 'Complete', status: 'complete', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=complete` },
+      { label: 'Terminate', status: 'terminate', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=terminate` },
+      { label: 'Quota Full', status: 'quotafull', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=quotafull` },
+      { label: 'Security', status: 'security', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=security` },
+    ]
+  }
+
+  function copyLink(key, url) {
+    navigator.clipboard.writeText(url)
+    setCopiedKey(key)
+    setTimeout(() => setCopiedKey(null), 1500)
   }
 
   return (
@@ -168,6 +186,12 @@ export default function ProjectsAdmin() {
                       >
                         {ratesProjectId === p.project_id ? 'Hide Rates' : 'Manage Rates'}
                       </button>
+                      <button
+                        className="btn-ghost"
+                        onClick={() => setLinksProjectId(linksProjectId === p.project_id ? null : p.project_id)}
+                      >
+                        {linksProjectId === p.project_id ? 'Hide Links' : 'Tracking Links'}
+                      </button>
                     </td>
                   </tr>
                 )
@@ -205,6 +229,35 @@ export default function ProjectsAdmin() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {linksProjectId && (
+          <div className="card" style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)' }}>
+            <h2 className="card-title">Tracking Links — {linksProjectId}</h2>
+            <p className="card-hint">
+              Replace <code>[UID]</code> in each link with your survey tool's dynamic respondent-ID variable before handing it to a client or embedding it as a redirect URL.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+              {getTrackingLinks(linksProjectId).map((link) => (
+                <div key={link.status} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span className="badge badge-gray" style={{ minWidth: 90, textAlign: 'center' }}>{link.label}</span>
+                  <input
+                    readOnly
+                    value={link.url}
+                    onFocus={(e) => e.target.select()}
+                    style={{ flex: 1, minWidth: 260, fontFamily: 'monospace', fontSize: 12 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => copyLink(link.status, link.url)}
+                  >
+                    {copiedKey === link.status ? 'Copied ✓' : 'Copy'}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}
