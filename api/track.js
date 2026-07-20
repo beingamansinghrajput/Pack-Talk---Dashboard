@@ -91,7 +91,7 @@ export default async function handler(req, res) {
             </tr>
           </tbody>
         </table>
-        <button onclick="copyRow()">Copy for Excel</button>
+        <button onclick="copyRow()">Copy</button>
         <div class="copied" id="copiedMsg"></div>
       </div>
       <script>
