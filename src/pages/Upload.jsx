@@ -10,6 +10,7 @@ const EMPTY_FORM = {
   start_time: '',
   end_time: '',
   country: '',
+  age_band: '',
   screener_pass: 'true',
   quota_status: 'Open',
   completed: 'false',
@@ -83,6 +84,7 @@ export default function Upload() {
       start_time: form.start_time,
       end_time: form.end_time || null,
       country: form.country.trim(),
+      age_band: form.age_band || null,
       screener_pass: form.screener_pass === 'true',
       quota_status: form.quota_status,
       completed: form.completed === 'true',
@@ -213,6 +215,7 @@ export default function Upload() {
             start_time: startTimeRaw,
             end_time: endTimeRaw,
             country: row.Country || row.country || '',
+            age_band: row['Age Band'] || row.age_band || null,
             screener_pass: String(row['Screener Pass'] ?? row.screener_pass ?? 'true').toLowerCase() !== 'no' && String(row['Screener Pass'] ?? row.screener_pass ?? 'true').toLowerCase() !== 'false',
             quota_status: row['Quota Status'] || row.quota_status || 'Open',
             completed: ['yes', 'true', true].includes(String(row['Survey Completed'] ?? row.completed ?? '').toLowerCase()),
@@ -236,7 +239,7 @@ export default function Upload() {
         if (deduped.length === 0) {
           const reason = invalidRows.length > 0
             ? `All rows were invalid. First issues: ${invalidRows.slice(0, 5).join('; ')}`
-            : 'No valid rows found. Check column headers: UID, Start Time, End Time, Country, Screener Pass, Quota Status, Survey Completed.'
+            : 'No valid rows found. Check column headers: UID, Start Time, End Time, Country, Age Band, Screener Pass, Quota Status, Survey Completed.'
           setBulkMessage({ type: 'error', text: reason })
           setBulkBusy(false)
           return
@@ -292,6 +295,9 @@ export default function Upload() {
             <label>Country
               <input required value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="e.g. Netherlands" />
             </label>
+            <label>Age Band
+              <input value={form.age_band} onChange={(e) => setForm({ ...form, age_band: e.target.value })} placeholder="e.g. 18-20" />
+            </label>
             <label>Screener Passed?
               <select value={form.screener_pass} onChange={(e) => setForm({ ...form, screener_pass: e.target.value })}>
                 <option value="true">Yes</option>
@@ -318,7 +324,7 @@ export default function Upload() {
         <div className="card">
           <h2 className="card-title">Bulk Excel Upload</h2>
           <p className="card-hint">
-            Expected columns: <code>UID, Start Time, End Time, Country, Screener Pass, Quota Status, Survey Completed</code>
+            Expected columns: <code>UID, Start Time, End Time, Country, Age Band, Screener Pass, Quota Status, Survey Completed</code>
           </p>
           <label className="field-label">Target Project
             <select value={bulkProjectId} onChange={(e) => setBulkProjectId(e.target.value)}>
