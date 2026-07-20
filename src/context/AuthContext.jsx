@@ -1,17 +1,13 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-
 const AuthContext = createContext()
-
 export function useAuth() {
   return useContext(AuthContext)
 }
-
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -32,7 +28,6 @@ export function AuthProvider({ children }) {
     })
     return () => listener.subscription.unsubscribe()
   }, [])
-
   async function loadProfile(userId) {
     const { data } = await supabase
       .from('profiles')
@@ -42,34 +37,31 @@ export function AuthProvider({ children }) {
     setProfile(data)
     setLoading(false)
   }
-
   async function refreshProfile() {
     if (session) {
       await loadProfile(session.user.id)
     }
   }
-
   async function signOut() {
     await supabase.auth.signOut()
     setSession(null)
     setProfile(null)
   }
-
   const isAdmin = profile?.role === 'admin'
   const isTeamLead = profile?.role === 'team_lead'
+  const isClient = profile?.role === 'client'
   const canManageTeam = isAdmin || isTeamLead
-
   const value = {
     session,
     user: session?.user ?? null,
     profile,
     isAdmin,
     isTeamLead,
+    isClient,
     canManageTeam,
     loading,
     signOut,
     refreshProfile,
   }
-
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
