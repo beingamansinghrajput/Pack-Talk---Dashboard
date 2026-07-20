@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
 
-const EMPTY = { project_id: '', project_name: '', target: '', loi: '', ir: '', country: '', launch_date: '' }
+const EMPTY = { project_id: '', project_name: '', target: '', loi: '', ir: '', country: '', launch_date: '', survey_link: '' }
 const TRACK_BASE = 'https://pack-talk-dashboard.vercel.app/api/track'
 
 export default function ProjectsAdmin() {
@@ -47,6 +47,7 @@ export default function ProjectsAdmin() {
       loi: Number(form.loi) || 0,
       ir: Number(form.ir) || 0,
       launch_date: form.launch_date || new Date().toISOString().slice(0, 10),
+      survey_link: form.survey_link || null,
       created_by: user.id,
     })
     setBusy(false)
@@ -61,6 +62,11 @@ export default function ProjectsAdmin() {
 
   async function updateStatus(project_id, status) {
     await supabase.from('projects').update({ status }).eq('project_id', project_id)
+    load()
+  }
+
+  async function updateSurveyLink(project_id, survey_link) {
+    await supabase.from('projects').update({ survey_link: survey_link || null }).eq('project_id', project_id)
     load()
   }
 
@@ -130,6 +136,9 @@ export default function ProjectsAdmin() {
           </label>
           <label>Launch Date
             <input type="date" value={form.launch_date} onChange={(e) => setForm({ ...form, launch_date: e.target.value })} />
+          </label>
+          <label>Survey Link (optional)
+            <input value={form.survey_link} onChange={(e) => setForm({ ...form, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
           </label>
           {message && <div className={message.type === 'error' ? 'auth-error' : 'auth-success'}>{message.text}</div>}
           <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create Project'}</button>
@@ -239,7 +248,22 @@ export default function ProjectsAdmin() {
             <p className="card-hint">
               Replace <code>[UID]</code> in each link with your survey tool's dynamic respondent-ID variable before handing it to a client or embedding it as a redirect URL.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+
+            <div style={{ marginTop: 12, marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: 'var(--text-secondary, #999)' }}>
+                Client's Survey Link
+              </label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  defaultValue={projects.find((p) => p.project_id === linksProjectId)?.survey_link || ''}
+                  onBlur={(e) => updateSurveyLink(linksProjectId, e.target.value)}
+                  placeholder="e.g. https://forms.gle/xxxxx"
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {getTrackingLinks(linksProjectId).map((link) => (
                 <div key={link.status} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <span className="badge badge-gray" style={{ minWidth: 90, textAlign: 'center' }}>{link.label}</span>
