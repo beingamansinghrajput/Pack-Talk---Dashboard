@@ -12,6 +12,8 @@ const STATUS_MAP = {
   security: { completed: false, screener_pass: false, quota_status: 'Open' },
 }
 
+const MAX_OPINIONS = 30
+
 function confirmationHtml({ project, uid, ip, statusLabel, finalStatusKey, isDuplicateIp }) {
   const copyText = `UID / Sting ID\tIP Address\tStatus\n${uid}\t${ip}\t${statusLabel}`
   return `
@@ -79,16 +81,20 @@ function opinionsFormHtml({ project, uid, ip }) {
       <title>One Last Step</title>
       <style>
         body { font-family: -apple-system, sans-serif; background: #0a0a0f; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background: #16161f; border: 1px solid #2a2a3a; border-radius: 16px; padding: 28px 32px; max-width: 560px; width: 100%; }
+        .card { background: #16161f; border: 1px solid #2a2a3a; border-radius: 16px; padding: 28px 32px; max-width: 600px; width: 100%; }
         h1 { font-size: 18px; margin: 0 0 8px 0; text-align: center; }
         p.sub { text-align: center; color: #888; font-size: 13px; margin: 0 0 22px 0; }
         label { display: block; font-size: 13px; color: #ccc; margin-bottom: 6px; margin-top: 16px; }
         input, textarea { width: 100%; box-sizing: border-box; background: #0f0f16; border: 1px solid #2a2a3a; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; font-family: inherit; }
-        textarea { min-height: 140px; resize: vertical; }
+        textarea { min-height: 70px; resize: vertical; }
+        #opinionBoxes { margin-top: 6px; }
+        .opinion-block { margin-top: 14px; }
+        .opinion-block label { margin-top: 0; font-weight: 600; color: #f0f0f0; }
         button { display: block; width: 100%; margin-top: 22px; background: linear-gradient(90deg, #f97316, #a855f7); color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
         button:disabled { opacity: 0.5; cursor: default; }
         button:active:not(:disabled) { transform: scale(0.98); }
         .err { color: #f87171; font-size: 13px; margin-top: 10px; text-align: center; min-height: 16px; }
+        .hint { font-size: 12px; color: #666; margin-top: 4px; }
       </style>
     </head>
     <body>
@@ -100,29 +106,66 @@ function opinionsFormHtml({ project, uid, ip }) {
           <input type="number" id="age" min="1" max="120" required />
 
           <label>Number of Opinions Typed</label>
-          <input type="number" id="opinionsCount" min="1" required />
+          <input type="number" id="opinionsCount" min="1" max="${MAX_OPINIONS}" required />
+          <div class="hint">Enter how many separate opinions you have, then the matching number of boxes will appear below.</div>
 
-          <label>Paste Your Opinions Below</label>
-          <textarea id="opinions" required placeholder="Paste all your opinions here..."></textarea>
+          <div id="opinionBoxes"></div>
 
           <button type="submit" id="submitBtn">Submit</button>
           <div class="err" id="errMsg"></div>
         </form>
       </div>
       <script>
+        const MAX_OPINIONS = ${MAX_OPINIONS}
+        const countInput = document.getElementById('opinionsCount')
+        const boxesContainer = document.getElementById('opinionBoxes')
         const form = document.getElementById('opinionsForm')
         const btn = document.getElementById('submitBtn')
         const errMsg = document.getElementById('errMsg')
 
+        function renderBoxes() {
+          let n = parseInt(countInput.value, 10)
+          if (isNaN(n) || n < 1) n = 0
+          if (n > MAX_OPINIONS) {
+            n = MAX_OPINIONS
+            countInput.value = MAX_OPINIONS
+          }
+
+          const existing = boxesContainer.querySelectorAll('textarea').length
+
+          if (n > existing) {
+            for (let i = existing + 1; i <= n; i++) {
+              const div = document.createElement('div')
+              div.className = 'opinion-block'
+              div.innerHTML = '<label>Opinion ' + i + '</label><textarea data-index="' + i + '" required placeholder="Type or paste opinion ' + i + '..."></textarea>'
+              boxesContainer.appendChild(div)
+            }
+          } else if (n < existing) {
+            const blocks = boxesContainer.querySelectorAll('.opinion-block')
+            for (let i = blocks.length - 1; i >= n; i--) {
+              blocks[i].remove()
+            }
+          }
+        }
+
+        countInput.addEventListener('input', renderBoxes)
+
         form.addEventListener('submit', async (e) => {
           e.preventDefault()
           errMsg.textContent = ''
-          btn.disabled = true
-          btn.textContent = 'Submitting...'
 
           const age = document.getElementById('age').value
-          const opinionsCount = document.getElementById('opinionsCount').value
-          const opinions = document.getElementById('opinions').value
+          const opinionsCount = countInput.value
+          const textareas = Array.from(boxesContainer.querySelectorAll('textarea'))
+          const opinions = textareas.map(t => t.value.trim())
+
+          if (opinions.length === 0 || opinions.some(o => o.length === 0)) {
+            errMsg.textContent = 'Please fill in all opinion boxes.'
+            return
+          }
+
+          btn.disabled = true
+          btn.textContent = 'Submitting...'
 
           try {
             const res = await fetch('/api/save-opinions', {
@@ -207,7 +250,6 @@ export default async function handler(req, res) {
 
   res.setHeader('Content-Type', 'text/html')
 
-  // Only show the opinions form for a genuine Complete (not a duplicate-IP downgrade to Terminated)
   if (finalStatusKey === 'complete' && !isDuplicateIp) {
     return res.status(200).send(opinionsFormHtml({ project, uid, ip }))
   }
