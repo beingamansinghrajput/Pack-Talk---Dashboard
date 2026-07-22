@@ -56,10 +56,10 @@ export default function ClientDashboard() {
 
   function getTrackingLinks(project_id) {
     return [
-      { label: 'Complete', status: 'complete', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=complete` },
-      { label: 'Terminate', status: 'terminate', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=terminate` },
-      { label: 'Quota Full', status: 'quotafull', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=quotafull` },
-      { label: 'Security', status: 'security', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=security` },
+      { label: 'Complete', status: 'complete', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=complete&country=[COUNTRY]&age_band=[AGE_BAND]` },
+      { label: 'Terminate', status: 'terminate', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=terminate&country=[COUNTRY]&age_band=[AGE_BAND]` },
+      { label: 'Quota Full', status: 'quotafull', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=quotafull&country=[COUNTRY]&age_band=[AGE_BAND]` },
+      { label: 'Security', status: 'security', url: `${TRACK_BASE}?project=${project_id}&uid=[UID]&status=security&country=[COUNTRY]&age_band=[AGE_BAND]` },
     ]
   }
 
@@ -314,7 +314,7 @@ export default function ClientDashboard() {
 
             <h3 style={{ fontSize: 15, marginBottom: 8 }}>Tracking Links</h3>
             <p className="card-hint">
-              Paste these into your survey tool's redirect/thank-you-page settings, replacing <code>[UID]</code> with your tool's respondent ID variable.
+              Paste these into your survey tool's redirect/thank-you-page settings, replacing <code>[UID]</code>, <code>[COUNTRY]</code>, and <code>[AGE_BAND]</code> with your tool's variables. Country and age band are optional but power the Quota Progress table above.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
               {getTrackingLinks(p.project_id).map((link) => (
