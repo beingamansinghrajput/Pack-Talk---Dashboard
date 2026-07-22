@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
 
 const TRACK_BASE = 'https://pack-talk-dashboard.vercel.app/api/track'
-const EMPTY_ENTRY = { project_id: '', uid: '', start_time: '', end_time: '', country: '', age_band: '', screener_pass: 'true', quota_status: 'Open', completed: 'false' }
 const EMPTY_PROJECT = { project_id: '', project_name: '', target: '', loi: '', ir: '', country: '', launch_date: '', survey_link: '' }
 
 export default function ClientDashboard() {
@@ -15,9 +14,6 @@ export default function ClientDashboard() {
   const [quotas, setQuotas] = useState([])
   const [loading, setLoading] = useState(true)
   const [copiedKey, setCopiedKey] = useState(null)
-  const [form, setForm] = useState(EMPTY_ENTRY)
-  const [message, setMessage] = useState(null)
-  const [busy, setBusy] = useState(false)
 
   const [quotaFile, setQuotaFile] = useState(null)
   const [quotaPreview, setQuotaPreview] = useState([])
@@ -52,8 +48,7 @@ export default function ClientDashboard() {
     setProjects(projectData || [])
     setResponses(responseData || [])
     setQuotas(quotaData || [])
-    if (!form.project_id && projectData && projectData.length > 0) {
-      setForm((f) => ({ ...f, project_id: projectData[0].project_id }))
+    if (!quotaProjectId && projectData && projectData.length > 0) {
       setQuotaProjectId(projectData[0].project_id)
     }
     setLoading(false)
@@ -72,7 +67,7 @@ export default function ClientDashboard() {
       loi: Number(projectForm.loi) || 0,
       ir: Number(projectForm.ir) || 0,
       launch_date: projectForm.launch_date || new Date().toISOString().slice(0, 10),
-      survey_link: projectForm.survey_link || null,
+      survey_link: projectForm.survey_link.trim(),
       status: 'Live',
       created_by: user.id,
     })
@@ -135,46 +130,6 @@ export default function ClientDashboard() {
         toGo: Math.max(q.target_count - done, 0),
       }
     })
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setBusy(true)
-    setMessage(null)
-
-    const { data: dupe } = await supabase
-      .from('responses')
-      .select('id')
-      .eq('project_id', form.project_id)
-      .eq('uid', form.uid)
-      .maybeSingle()
-
-    if (dupe) {
-      setMessage({ type: 'error', text: 'This UID has already been punched in for this project.' })
-      setBusy(false)
-      return
-    }
-
-    const { error } = await supabase.from('responses').insert({
-      project_id: form.project_id,
-      uid: form.uid,
-      start_time: form.start_time || null,
-      end_time: form.end_time || null,
-      country: form.country || null,
-      age_band: form.age_band || null,
-      screener_pass: form.screener_pass === 'true',
-      quota_status: form.quota_status,
-      completed: form.completed === 'true',
-    })
-
-    setBusy(false)
-    if (error) {
-      setMessage({ type: 'error', text: error.message })
-    } else {
-      setMessage({ type: 'success', text: `Respondent ${form.uid} punched in successfully.` })
-      setForm({ ...EMPTY_ENTRY, project_id: form.project_id })
-      load()
-    }
   }
 
   function handleQuotaFile(e) {
@@ -305,7 +260,7 @@ export default function ClientDashboard() {
   return (
     <div className="page">
       <h1>Welcome, {profile?.full_name || profile?.email}</h1>
-      <p className="page-sub">Your projects, tracking links, quotas, and survey data.</p>
+      <p className="page-sub">Your projects, tracking links, and quotas.</p>
 
       <Reveal>
       <div className="card" style={{ maxWidth: 640, marginBottom: 20 }}>
@@ -333,8 +288,8 @@ export default function ClientDashboard() {
           <label>Launch Date
             <input type="date" value={projectForm.launch_date} onChange={(e) => setProjectForm({ ...projectForm, launch_date: e.target.value })} />
           </label>
-          <label>Survey Link (optional)
-            <input value={projectForm.survey_link} onChange={(e) => setProjectForm({ ...projectForm, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
+          <label>Survey Link
+            <input required value={projectForm.survey_link} onChange={(e) => setProjectForm({ ...projectForm, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
           </label>
           {projectMessage && <div className={projectMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{projectMessage.text}</div>}
           <button className="btn-primary" type="submit" disabled={projectBusy}>{projectBusy ? 'Creating…' : 'Create Survey'}</button>
@@ -418,7 +373,7 @@ export default function ClientDashboard() {
 
       {projects.length > 0 && (
         <Reveal delay={40}>
-        <div className="card" style={{ maxWidth: 640, marginBottom: 20 }}>
+        <div className="card" style={{ maxWidth: 640 }}>
           <h2 className="card-title">Upload Quota Brief</h2>
           <p className="card-hint">
             Upload an Excel/CSV file with columns: <code>Country, Age Band, Target Count, Survey URL</code>. One row per country + age band. Re-uploading updates existing rows for the same country/age band.
@@ -456,56 +411,6 @@ export default function ClientDashboard() {
           <button className="btn-primary" onClick={handleQuotaUpload} disabled={quotaBusy || !quotaFile} style={{ marginTop: 12 }}>
             {quotaBusy ? 'Uploading…' : 'Upload Quota File'}
           </button>
-        </div>
-        </Reveal>
-      )}
-
-      {projects.length > 0 && (
-        <Reveal delay={80}>
-        <div className="card" style={{ maxWidth: 480 }}>
-          <h2 className="card-title">Add a Respondent</h2>
-          <form onSubmit={handleSubmit} className="form-grid">
-            <label>Project
-              <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
-                {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_name} ({p.project_id})</option>)}
-              </select>
-            </label>
-            <label>Respondent UID
-              <input required value={form.uid} onChange={(e) => setForm({ ...form, uid: e.target.value })} placeholder="e.g. xhgfdrftyguhi" />
-            </label>
-            <label>Start Time
-              <input type="datetime-local" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
-            </label>
-            <label>End Time
-              <input type="datetime-local" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
-            </label>
-            <label>Country
-              <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="e.g. India" />
-            </label>
-            <label>Age Band
-              <input value={form.age_band} onChange={(e) => setForm({ ...form, age_band: e.target.value })} placeholder="e.g. 18-20" />
-            </label>
-            <label>Screener Passed?
-              <select value={form.screener_pass} onChange={(e) => setForm({ ...form, screener_pass: e.target.value })}>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </label>
-            <label>Quota Status
-              <select value={form.quota_status} onChange={(e) => setForm({ ...form, quota_status: e.target.value })}>
-                <option value="Open">Open</option>
-                <option value="Full">Full</option>
-              </select>
-            </label>
-            <label>Survey Completed?
-              <select value={form.completed} onChange={(e) => setForm({ ...form, completed: e.target.value })}>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </label>
-            {message && <div className={message.type === 'error' ? 'auth-error' : 'auth-success'}>{message.text}</div>}
-            <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Punching in…' : 'Punch In'}</button>
-          </form>
         </div>
         </Reveal>
       )}
