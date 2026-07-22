@@ -12,66 +12,9 @@ const STATUS_MAP = {
   security: { completed: false, screener_pass: false, quota_status: 'Open' },
 }
 
-export default async function handler(req, res) {
-  const { project, uid, status, age_band, country } = req.query
-
-  if (!project || !uid || !status) {
-    return res.status(400).send('Missing required parameters: project, uid, status')
-  }
-
-  let mapping = STATUS_MAP[status.toLowerCase()]
-  if (!mapping) {
-    return res.status(400).send('Invalid status. Use: complete, terminate, quotafull, or security')
-  }
-
-  const forwarded = req.headers['x-forwarded-for']
-  const ip = forwarded ? forwarded.split(',')[0].trim() : req.socket?.remoteAddress || 'unknown'
-
-  const { data: existingIpRows } = await supabase
-    .from('responses')
-    .select('id')
-    .eq('project_id', project)
-    .eq('ip_address', ip)
-    .limit(1)
-
-  const isDuplicateIp = existingIpRows && existingIpRows.length > 0
-  let finalStatusKey = status.toLowerCase()
-
-  if (isDuplicateIp) {
-    mapping = STATUS_MAP.terminate
-    finalStatusKey = 'terminate'
-  }
-
-  const now = new Date().toISOString()
-
-  const { error } = await supabase.from('responses').insert({
-    project_id: project,
-    uid: uid,
-    start_time: now,
-    end_time: now,
-    country: country || null,
-    age_band: age_band || null,
-    screener_pass: mapping.screener_pass,
-    quota_status: mapping.quota_status,
-    completed: mapping.completed,
-    ip_address: ip,
-  })
-
-  if (error) {
-    return res.status(500).send('Error logging response: ' + error.message)
-  }
-
-  const statusLabel = {
-    complete: 'Completed',
-    terminate: 'Terminated',
-    quotafull: 'Quota Full',
-    security: 'Security Terminated',
-  }[finalStatusKey]
-
+function confirmationHtml({ project, uid, ip, statusLabel, finalStatusKey, isDuplicateIp }) {
   const copyText = `UID / Sting ID\tIP Address\tStatus\n${uid}\t${ip}\t${statusLabel}`
-
-  res.setHeader('Content-Type', 'text/html')
-  res.status(200).send(`
+  return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -125,5 +68,156 @@ export default async function handler(req, res) {
       </script>
     </body>
     </html>
-  `)
+  `
+}
+
+function opinionsFormHtml({ project, uid, ip }) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>One Last Step</title>
+      <style>
+        body { font-family: -apple-system, sans-serif; background: #0a0a0f; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .card { background: #16161f; border: 1px solid #2a2a3a; border-radius: 16px; padding: 28px 32px; max-width: 560px; width: 100%; }
+        h1 { font-size: 18px; margin: 0 0 8px 0; text-align: center; }
+        p.sub { text-align: center; color: #888; font-size: 13px; margin: 0 0 22px 0; }
+        label { display: block; font-size: 13px; color: #ccc; margin-bottom: 6px; margin-top: 16px; }
+        input, textarea { width: 100%; box-sizing: border-box; background: #0f0f16; border: 1px solid #2a2a3a; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 14px; font-family: inherit; }
+        textarea { min-height: 140px; resize: vertical; }
+        button { display: block; width: 100%; margin-top: 22px; background: linear-gradient(90deg, #f97316, #a855f7); color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        button:active:not(:disabled) { transform: scale(0.98); }
+        .err { color: #f87171; font-size: 13px; margin-top: 10px; text-align: center; min-height: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>Almost done</h1>
+        <p class="sub">Please answer a couple of quick questions before you finish.</p>
+        <form id="opinionsForm">
+          <label>Your Age</label>
+          <input type="number" id="age" min="1" max="120" required />
+
+          <label>Number of Opinions Typed</label>
+          <input type="number" id="opinionsCount" min="1" required />
+
+          <label>Paste Your Opinions Below</label>
+          <textarea id="opinions" required placeholder="Paste all your opinions here..."></textarea>
+
+          <button type="submit" id="submitBtn">Submit</button>
+          <div class="err" id="errMsg"></div>
+        </form>
+      </div>
+      <script>
+        const form = document.getElementById('opinionsForm')
+        const btn = document.getElementById('submitBtn')
+        const errMsg = document.getElementById('errMsg')
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault()
+          errMsg.textContent = ''
+          btn.disabled = true
+          btn.textContent = 'Submitting...'
+
+          const age = document.getElementById('age').value
+          const opinionsCount = document.getElementById('opinionsCount').value
+          const opinions = document.getElementById('opinions').value
+
+          try {
+            const res = await fetch('/api/save-opinions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                project: ${JSON.stringify(project)},
+                uid: ${JSON.stringify(uid)},
+                ip: ${JSON.stringify(ip)},
+                age,
+                opinionsCount,
+                opinions,
+              }),
+            })
+
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}))
+              throw new Error(data.error || 'Something went wrong. Please try again.')
+            }
+
+            document.body.innerHTML = ${JSON.stringify('<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;background:#0a0a0f;color:#fff;"><div style="text-align:center;"><h1 style="font-size:20px;">Thank you!</h1><p style="color:#888;font-size:14px;">Your response has been recorded.</p></div></div>')}
+          } catch (err) {
+            errMsg.textContent = err.message
+            btn.disabled = false
+            btn.textContent = 'Submit'
+          }
+        })
+      </script>
+    </body>
+    </html>
+  `
+}
+
+export default async function handler(req, res) {
+  const { project, uid, status, age_band, country } = req.query
+
+  if (!project || !uid || !status) {
+    return res.status(400).send('Missing required parameters: project, uid, status')
+  }
+
+  let mapping = STATUS_MAP[status.toLowerCase()]
+  if (!mapping) {
+    return res.status(400).send('Invalid status. Use: complete, terminate, quotafull, or security')
+  }
+
+  const forwarded = req.headers['x-forwarded-for']
+  const ip = forwarded ? forwarded.split(',')[0].trim() : req.socket?.remoteAddress || 'unknown'
+
+  const { data: existingIpRows } = await supabase
+    .from('responses')
+    .select('id')
+    .eq('project_id', project)
+    .eq('ip_address', ip)
+    .limit(1)
+
+  const isDuplicateIp = existingIpRows && existingIpRows.length > 0
+  let finalStatusKey = status.toLowerCase()
+
+  if (isDuplicateIp) {
+    mapping = STATUS_MAP.terminate
+    finalStatusKey = 'terminate'
+  }
+
+  const now = new Date().toISOString()
+
+  const { error } = await supabase.from('responses').insert({
+    project_id: project,
+    uid: uid,
+    start_time: now,
+    end_time: now,
+    country: country || null,
+    age_band: age_band || null,
+    screener_pass: mapping.screener_pass,
+    quota_status: mapping.quota_status,
+    completed: mapping.completed,
+    ip_address: ip,
+  })
+
+  if (error) {
+    return res.status(500).send('Error logging response: ' + error.message)
+  }
+
+  res.setHeader('Content-Type', 'text/html')
+
+  // Only show the opinions form for a genuine Complete (not a duplicate-IP downgrade to Terminated)
+  if (finalStatusKey === 'complete' && !isDuplicateIp) {
+    return res.status(200).send(opinionsFormHtml({ project, uid, ip }))
+  }
+
+  const statusLabel = {
+    complete: 'Completed',
+    terminate: 'Terminated',
+    quotafull: 'Quota Full',
+    security: 'Security Terminated',
+  }[finalStatusKey]
+
+  return res.status(200).send(confirmationHtml({ project, uid, ip, statusLabel, finalStatusKey, isDuplicateIp }))
 }
