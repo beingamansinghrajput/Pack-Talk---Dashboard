@@ -4,24 +4,11 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
 
-const EMPTY_FORM = {
-  project_id: '',
-  uid: '',
-  start_time: '',
-  end_time: '',
-  country: '',
-  age_band: '',
-  screener_pass: 'true',
-  quota_status: 'Open',
-  completed: 'false',
-}
+const EMPTY_PROJECT = { project_id: '', project_name: '', target: '', loi: '', ir: '', country: '', launch_date: '', survey_link: '' }
 
 export default function Upload() {
   const { user } = useAuth()
   const [projects, setProjects] = useState([])
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [message, setMessage] = useState(null)
-  const [busy, setBusy] = useState(false)
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState([])
@@ -30,72 +17,45 @@ export default function Upload() {
   const [bulkMessage, setBulkMessage] = useState(null)
   const [bulkBusy, setBulkBusy] = useState(false)
 
+  const [projectForm, setProjectForm] = useState(EMPTY_PROJECT)
+  const [projectMessage, setProjectMessage] = useState(null)
+  const [projectBusy, setProjectBusy] = useState(false)
+
   useEffect(() => {
+    loadProjects()
+  }, [])
+
+  function loadProjects() {
     supabase.from('projects').select('project_id, project_name').order('project_id').then(({ data }) => {
       setProjects(data || [])
     })
-  }, [])
-
-  function validateManualForm() {
-    if (!form.project_id) return 'Please select a project.'
-    if (!form.uid || !form.uid.trim()) return 'Respondent UID cannot be empty.'
-    if (!form.start_time) return 'Start time is required.'
-    if (form.end_time && new Date(form.end_time) < new Date(form.start_time)) {
-      return 'End time cannot be before start time.'
-    }
-    if (!form.country || !form.country.trim()) return 'Country is required.'
-    return null
   }
 
-  async function handleManualSubmit(e) {
+  async function createProject(e) {
     e.preventDefault()
-    setMessage(null)
+    setProjectBusy(true)
+    setProjectMessage(null)
 
-    const validationError = validateManualForm()
-    if (validationError) {
-      setMessage({ type: 'error', text: validationError })
-      return
-    }
-
-    setBusy(true)
-
-    const { data: existing, error: checkError } = await supabase
-      .from('responses')
-      .select('id')
-      .eq('project_id', form.project_id)
-      .eq('uid', form.uid.trim())
-      .maybeSingle()
-
-    if (checkError) {
-      setBusy(false)
-      setMessage({ type: 'error', text: checkError.message })
-      return
-    }
-
-    if (existing) {
-      setBusy(false)
-      setMessage({ type: 'error', text: `UID "${form.uid}" already exists for project ${form.project_id}. Duplicate entries are not allowed.` })
-      return
-    }
-
-    const { error } = await supabase.from('responses').insert({
-      project_id: form.project_id,
-      uid: form.uid.trim(),
-      start_time: form.start_time,
-      end_time: form.end_time || null,
-      country: form.country.trim(),
-      age_band: form.age_band || null,
-      screener_pass: form.screener_pass === 'true',
-      quota_status: form.quota_status,
-      completed: form.completed === 'true',
+    const { error } = await supabase.from('projects').insert({
+      project_id: projectForm.project_id.trim(),
+      project_name: projectForm.project_name.trim(),
+      country: projectForm.country.trim(),
+      target: Number(projectForm.target) || 0,
+      loi: Number(projectForm.loi) || 0,
+      ir: Number(projectForm.ir) || 0,
+      launch_date: projectForm.launch_date || new Date().toISOString().slice(0, 10),
+      survey_link: projectForm.survey_link || null,
+      status: 'Live',
       created_by: user.id,
     })
-    setBusy(false)
+
+    setProjectBusy(false)
     if (error) {
-      setMessage({ type: 'error', text: error.message })
+      setProjectMessage({ type: 'error', text: error.message })
     } else {
-      setMessage({ type: 'success', text: `Respondent ${form.uid} punched in successfully.` })
-      setForm({ ...EMPTY_FORM, project_id: form.project_id })
+      setProjectMessage({ type: 'success', text: `Survey "${projectForm.project_id}" created and live.` })
+      setProjectForm(EMPTY_PROJECT)
+      loadProjects()
     }
   }
 
@@ -185,7 +145,7 @@ export default function Upload() {
         json.forEach((row, idx) => {
           const uid = String(row.UID || row.uid || '').trim()
           const startTimeRaw = row['Start Time'] || row.start_time
-          const rowNum = idx + 2 // +2 accounts for header row + 0-index
+          const rowNum = idx + 2
 
           if (!uid) {
             invalidRows.push(`Row ${rowNum}: missing UID`)
@@ -270,54 +230,40 @@ export default function Upload() {
   return (
     <div className="page">
       <h1>Punch In Survey Data</h1>
-      <p className="page-sub">Log respondents one at a time, or upload a full Excel export at once.</p>
+      <p className="page-sub">Create a new survey, or upload a full Excel export of respondents.</p>
 
       <Reveal>
       <div className="two-col">
         <div className="card">
-          <h2 className="card-title">Manual Entry</h2>
-          <form onSubmit={handleManualSubmit} className="form-grid">
-            <label>Project
-              <select required value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
-                <option value="">Select project…</option>
-                {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_id} — {p.project_name}</option>)}
-              </select>
+          <h2 className="card-title">Create New Survey</h2>
+          <p className="card-hint">Creates a new project, live immediately.</p>
+          <form onSubmit={createProject} className="form-grid">
+            <label>Project ID
+              <input required value={projectForm.project_id} onChange={(e) => setProjectForm({ ...projectForm, project_id: e.target.value })} placeholder="e.g. COIN658" />
             </label>
-            <label>Respondent UID
-              <input required value={form.uid} onChange={(e) => setForm({ ...form, uid: e.target.value })} placeholder="e.g. xhgfdrftyguhiPV03" />
-            </label>
-            <label>Start Time
-              <input required type="datetime-local" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
-            </label>
-            <label>End Time
-              <input type="datetime-local" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+            <label>Project Name
+              <input required value={projectForm.project_name} onChange={(e) => setProjectForm({ ...projectForm, project_name: e.target.value })} placeholder="e.g. Consumer Panel Wave 3" />
             </label>
             <label>Country
-              <input required value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="e.g. Netherlands" />
+              <input required value={projectForm.country} onChange={(e) => setProjectForm({ ...projectForm, country: e.target.value })} placeholder="e.g. India" />
             </label>
-            <label>Age Band
-              <input value={form.age_band} onChange={(e) => setForm({ ...form, age_band: e.target.value })} placeholder="e.g. 18-20" />
+            <label>Target
+              <input type="number" value={projectForm.target} onChange={(e) => setProjectForm({ ...projectForm, target: e.target.value })} />
             </label>
-            <label>Screener Passed?
-              <select value={form.screener_pass} onChange={(e) => setForm({ ...form, screener_pass: e.target.value })}>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
+            <label>LOI (min)
+              <input type="number" value={projectForm.loi} onChange={(e) => setProjectForm({ ...projectForm, loi: e.target.value })} />
             </label>
-            <label>Quota Status
-              <select value={form.quota_status} onChange={(e) => setForm({ ...form, quota_status: e.target.value })}>
-                <option value="Open">Open</option>
-                <option value="Full">Full</option>
-              </select>
+            <label>IR (%)
+              <input type="number" value={projectForm.ir} onChange={(e) => setProjectForm({ ...projectForm, ir: e.target.value })} />
             </label>
-            <label>Survey Completed?
-              <select value={form.completed} onChange={(e) => setForm({ ...form, completed: e.target.value })}>
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-              </select>
+            <label>Launch Date
+              <input type="date" value={projectForm.launch_date} onChange={(e) => setProjectForm({ ...projectForm, launch_date: e.target.value })} />
             </label>
-            {message && <div className={message.type === 'error' ? 'auth-error' : 'auth-success'}>{message.text}</div>}
-            <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Punch In'}</button>
+            <label>Survey Link (optional)
+              <input value={projectForm.survey_link} onChange={(e) => setProjectForm({ ...projectForm, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
+            </label>
+            {projectMessage && <div className={projectMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{projectMessage.text}</div>}
+            <button className="btn-primary" type="submit" disabled={projectBusy}>{projectBusy ? 'Creating…' : 'Create Survey'}</button>
           </form>
         </div>
 
