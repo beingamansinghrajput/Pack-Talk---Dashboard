@@ -7,9 +7,16 @@ export default async function handler(req, res) {
 
   const { project, uid, ip, age, opinionsCount, opinions } = req.body
 
-  if (!project || !uid || !age || !opinionsCount || !opinions) {
+  if (!project || !uid || !age || !opinionsCount || !Array.isArray(opinions) || opinions.length === 0) {
     return res.status(400).send('Missing required fields.')
   }
+
+  const MAX_OPINIONS = 30
+  const trimmedOpinions = opinions.slice(0, MAX_OPINIONS)
+  const paddedOpinions = [
+    ...trimmedOpinions,
+    ...Array(MAX_OPINIONS - trimmedOpinions.length).fill(''),
+  ]
 
   try {
     const auth = new google.auth.GoogleAuth({
@@ -28,13 +35,13 @@ export default async function handler(req, res) {
       ip || '',
       age,
       opinionsCount,
-      opinions,
+      ...paddedOpinions,
       new Date().toISOString(),
     ]]
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.OPINIONS_SHEET_ID,
-      range: "'PackTalk Open-Ended Opinions'!A:G",
+      range: "'PackTalk Open-Ended Opinions'!A:AJ",
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values },
