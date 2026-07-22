@@ -12,6 +12,10 @@ const STATUS_META = {
   Disqualify: { label: 'Disqualify', color: '#6B7280', icon: '✕' },
 }
 
+const IR_MIN_SAMPLE = 5
+const IR_GOOD_THRESHOLD = 10
+const IR_WARN_THRESHOLD = 20
+
 function isToday(dateStr) {
   const d = new Date(dateStr)
   const t = new Date()
@@ -22,6 +26,24 @@ function isThisMonth(dateStr) {
   const d = new Date(dateStr)
   const t = new Date()
   return d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear()
+}
+
+function getIRHealth(project, counts) {
+  const sample = counts.Completed + counts.Terminated
+  if (sample < IR_MIN_SAMPLE) {
+    return { status: 'insufficient', label: 'Insufficient data', color: '#6B7280', actualIR: null }
+  }
+  const actualIR = (counts.Completed / sample) * 100
+  const expectedIR = Number(project.ir) || 0
+  const diff = Math.abs(actualIR - expectedIR)
+
+  if (diff <= IR_GOOD_THRESHOLD) {
+    return { status: 'good', label: `${actualIR.toFixed(0)}% (on target)`, color: '#16A34A', actualIR }
+  }
+  if (diff <= IR_WARN_THRESHOLD) {
+    return { status: 'warn', label: `${actualIR.toFixed(0)}% (watch)`, color: '#D97706', actualIR }
+  }
+  return { status: 'bad', label: `${actualIR.toFixed(0)}% (off target)`, color: '#DC2626', actualIR }
 }
 
 export default function Dashboard() {
@@ -89,7 +111,8 @@ export default function Dashboard() {
         const rows = responses.filter((r) => r.project_id === p.project_id)
         const counts = { Completed: 0, Terminated: 0, QuotaFull: 0, Disqualify: 0 }
         rows.forEach((r) => counts[r.status]++)
-        return { ...p, totalHits: rows.length, counts }
+        const irHealth = getIRHealth(p, counts)
+        return { ...p, totalHits: rows.length, counts, irHealth }
       })
   }, [projects, responses, search])
 
@@ -176,6 +199,7 @@ export default function Dashboard() {
                 <th>Terminated</th>
                 <th>QuotaFull</th>
                 <th>Disqualify</th>
+                <th>IR Health</th>
               </tr>
             </thead>
             <tbody>
@@ -193,10 +217,19 @@ export default function Dashboard() {
                   <td className="text-red">{p.counts.Terminated}</td>
                   <td className="text-amber">{p.counts.QuotaFull}</td>
                   <td className="text-gray">{p.counts.Disqualify}</td>
+                  <td>
+                    <span
+                      className="badge"
+                      style={{ background: `${p.irHealth.color}22`, color: p.irHealth.color, border: `1px solid ${p.irHealth.color}55` }}
+                      title={p.irHealth.actualIR != null ? `Expected ${p.ir}% · Actual ${p.irHealth.actualIR.toFixed(1)}%` : 'Not enough Completed+Terminated responses yet'}
+                    >
+                      {p.irHealth.label}
+                    </span>
+                  </td>
                 </tr>
               ))}
               {projectRows.length === 0 && (
-                <tr><td colSpan={9} className="empty-row">No projects yet. Ask an admin to add one under Manage Projects.</td></tr>
+                <tr><td colSpan={10} className="empty-row">No projects yet. Ask an admin to add one under Manage Projects.</td></tr>
               )}
             </tbody>
           </table>
