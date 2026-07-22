@@ -44,7 +44,7 @@ export default function Upload() {
       loi: Number(projectForm.loi) || 0,
       ir: Number(projectForm.ir) || 0,
       launch_date: projectForm.launch_date || new Date().toISOString().slice(0, 10),
-      survey_link: projectForm.survey_link || null,
+      survey_link: projectForm.survey_link.trim(),
       status: 'Live',
       created_by: user.id,
     })
@@ -259,8 +259,8 @@ export default function Upload() {
             <label>Launch Date
               <input type="date" value={projectForm.launch_date} onChange={(e) => setProjectForm({ ...projectForm, launch_date: e.target.value })} />
             </label>
-            <label>Survey Link (optional)
-              <input value={projectForm.survey_link} onChange={(e) => setProjectForm({ ...projectForm, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
+            <label>Survey Link
+              <input required value={projectForm.survey_link} onChange={(e) => setProjectForm({ ...projectForm, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
             </label>
             {projectMessage && <div className={projectMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{projectMessage.text}</div>}
             <button className="btn-primary" type="submit" disabled={projectBusy}>{projectBusy ? 'Creating…' : 'Create Survey'}</button>
