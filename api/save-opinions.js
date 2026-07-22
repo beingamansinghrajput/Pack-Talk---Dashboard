@@ -1,5 +1,9 @@
 import { google } from 'googleapis'
 
+const SHEET_TAB_NAME = 'PackTalk Open-Ended Opinions'
+const Q = String.fromCharCode(39) // a guaranteed straight single-quote character
+const SHEET_RANGE = Q + SHEET_TAB_NAME + Q + '!A:AJ'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).send('Method not allowed')
@@ -41,7 +45,7 @@ export default async function handler(req, res) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.OPINIONS_SHEET_ID,
-      range: "'PackTalk Open-Ended Opinions'!A:AJ",
+      range: SHEET_RANGE,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values },
