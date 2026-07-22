@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -11,6 +11,26 @@ const STATUS_CLASS = {
   Disqualify: 'badge-gray',
 }
 const PAGE_SIZE = 15
+const IR_MIN_SAMPLE = 5
+const IR_GOOD_THRESHOLD = 10
+const IR_WARN_THRESHOLD = 20
+
+function getIRHealth(expectedIR, completedCount, terminatedCount) {
+  const sample = completedCount + terminatedCount
+  if (sample < IR_MIN_SAMPLE) {
+    return { status: 'insufficient', label: 'Insufficient data yet', color: '#6B7280', actualIR: null, sample }
+  }
+  const actualIR = (completedCount / sample) * 100
+  const diff = Math.abs(actualIR - expectedIR)
+
+  if (diff <= IR_GOOD_THRESHOLD) {
+    return { status: 'good', label: 'On target', color: '#16A34A', actualIR, sample }
+  }
+  if (diff <= IR_WARN_THRESHOLD) {
+    return { status: 'warn', label: 'Watch closely', color: '#D97706', actualIR, sample }
+  }
+  return { status: 'bad', label: 'Off target', color: '#DC2626', actualIR, sample }
+}
 
 export default function ProjectDetail() {
   const { projectId } = useParams()
@@ -26,6 +46,8 @@ export default function ProjectDetail() {
   const [countryFilter, setCountryFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+
+  const [irCounts, setIrCounts] = useState({ Completed: 0, Terminated: 0, QuotaFull: 0, Disqualify: 0 })
 
   useEffect(() => {
     setPage(0)
@@ -60,7 +82,21 @@ export default function ProjectDetail() {
     setRows(data || [])
     setTotal(count || 0)
     setLoading(false)
+
+    const { data: allStatusRows } = await supabase
+      .from('responses')
+      .select('status')
+      .eq('project_id', projectId)
+      .eq('deleted', false)
+    const counts = { Completed: 0, Terminated: 0, QuotaFull: 0, Disqualify: 0 }
+    ;(allStatusRows || []).forEach((r) => { if (counts[r.status] !== undefined) counts[r.status]++ })
+    setIrCounts(counts)
   }
+
+  const irHealth = useMemo(() => {
+    if (!project) return null
+    return getIRHealth(Number(project.ir) || 0, irCounts.Completed, irCounts.Terminated)
+  }, [project, irCounts])
 
   async function handleDelete(row) {
     const confirmed = window.confirm(`Remove respondent ${row.uid}? This can be restored later by an admin if needed.`)
@@ -144,6 +180,58 @@ export default function ProjectDetail() {
         <div className={actionMessage.type === 'error' ? 'auth-error' : 'auth-success'} style={{ marginBottom: 12 }}>
           {actionMessage.text}
         </div>
+      )}
+
+      {project && irHealth && (
+        <Reveal>
+        <div className="card" style={{ borderLeft: `3px solid ${irHealth.color}` }}>
+          <h2 className="card-title">IR Health Check</h2>
+          {irHealth.status === 'insufficient' ? (
+            <p className="card-hint">
+              Not enough data yet ({irHealth.sample} Completed+Terminated so far — need at least {IR_MIN_SAMPLE} to evaluate).
+            </p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '12px 0' }}>
+                <div>
+                  <div className="card-hint">Expected IR</div>
+                  <div style={{ fontSize: 22, fontWeight: 700 }}>{project.ir}%</div>
+                </div>
+                <div>
+                  <div className="card-hint">Actual IR</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: irHealth.color }}>{irHealth.actualIR.toFixed(1)}%</div>
+                </div>
+                <div>
+                  <div className="card-hint">Status</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: irHealth.color }}>{irHealth.label}</div>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table className="data-table small">
+                  <thead>
+                    <tr><th></th><th>Expected (of {irCounts.Completed + irCounts.Terminated})</th><th>Actual</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Completed</td>
+                      <td>{Math.round((irCounts.Completed + irCounts.Terminated) * (Number(project.ir) || 0) / 100)}</td>
+                      <td className="text-green">{irCounts.Completed}</td>
+                    </tr>
+                    <tr>
+                      <td>Terminated</td>
+                      <td>{Math.round((irCounts.Completed + irCounts.Terminated) * (100 - (Number(project.ir) || 0)) / 100)}</td>
+                      <td className="text-red">{irCounts.Terminated}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="card-hint" style={{ marginTop: 8 }}>
+                QuotaFull ({irCounts.QuotaFull}) and Disqualify ({irCounts.Disqualify}) are excluded from this ratio.
+              </p>
+            </>
+          )}
+        </div>
+        </Reveal>
       )}
 
       <Reveal>
