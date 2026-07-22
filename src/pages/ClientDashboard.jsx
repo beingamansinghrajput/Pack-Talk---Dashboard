@@ -6,6 +6,7 @@ import Reveal from '../components/Reveal'
 
 const TRACK_BASE = 'https://pack-talk-dashboard.vercel.app/api/track'
 const EMPTY_ENTRY = { project_id: '', uid: '', start_time: '', end_time: '', country: '', age_band: '', screener_pass: 'true', quota_status: 'Open', completed: 'false' }
+const EMPTY_PROJECT = { project_id: '', project_name: '', target: '', loi: '', ir: '', country: '', launch_date: '', survey_link: '' }
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth()
@@ -24,6 +25,10 @@ export default function ClientDashboard() {
   const [quotaProjectId, setQuotaProjectId] = useState('')
   const [quotaMessage, setQuotaMessage] = useState(null)
   const [quotaBusy, setQuotaBusy] = useState(false)
+
+  const [projectForm, setProjectForm] = useState(EMPTY_PROJECT)
+  const [projectMessage, setProjectMessage] = useState(null)
+  const [projectBusy, setProjectBusy] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -52,6 +57,45 @@ export default function ClientDashboard() {
       setQuotaProjectId(projectData[0].project_id)
     }
     setLoading(false)
+  }
+
+  async function createProject(e) {
+    e.preventDefault()
+    setProjectBusy(true)
+    setProjectMessage(null)
+
+    const { error: projectError } = await supabase.from('projects').insert({
+      project_id: projectForm.project_id.trim(),
+      project_name: projectForm.project_name.trim(),
+      country: projectForm.country.trim(),
+      target: Number(projectForm.target) || 0,
+      loi: Number(projectForm.loi) || 0,
+      ir: Number(projectForm.ir) || 0,
+      launch_date: projectForm.launch_date || new Date().toISOString().slice(0, 10),
+      survey_link: projectForm.survey_link || null,
+      status: 'Live',
+      created_by: user.id,
+    })
+
+    if (projectError) {
+      setProjectBusy(false)
+      setProjectMessage({ type: 'error', text: projectError.message })
+      return
+    }
+
+    const { error: linkError } = await supabase.from('client_projects').insert({
+      client_id: user.id,
+      project_id: projectForm.project_id.trim(),
+    })
+
+    setProjectBusy(false)
+    if (linkError) {
+      setProjectMessage({ type: 'error', text: `Project created but linking failed: ${linkError.message}` })
+    } else {
+      setProjectMessage({ type: 'success', text: `Survey "${projectForm.project_id}" created and live.` })
+      setProjectForm(EMPTY_PROJECT)
+      load()
+    }
   }
 
   function getTrackingLinks(project_id) {
@@ -263,10 +307,45 @@ export default function ClientDashboard() {
       <h1>Welcome, {profile?.full_name || profile?.email}</h1>
       <p className="page-sub">Your projects, tracking links, quotas, and survey data.</p>
 
+      <Reveal>
+      <div className="card" style={{ maxWidth: 640, marginBottom: 20 }}>
+        <h2 className="card-title">Create New Survey</h2>
+        <p className="card-hint">This creates a new project under your account, live immediately.</p>
+        <form onSubmit={createProject} className="form-grid">
+          <label>Project ID
+            <input required value={projectForm.project_id} onChange={(e) => setProjectForm({ ...projectForm, project_id: e.target.value })} placeholder="e.g. TOLUNA045" />
+          </label>
+          <label>Project Name
+            <input required value={projectForm.project_name} onChange={(e) => setProjectForm({ ...projectForm, project_name: e.target.value })} placeholder="e.g. Consumer Panel Wave 3" />
+          </label>
+          <label>Country
+            <input required value={projectForm.country} onChange={(e) => setProjectForm({ ...projectForm, country: e.target.value })} placeholder="e.g. India" />
+          </label>
+          <label>Target
+            <input type="number" value={projectForm.target} onChange={(e) => setProjectForm({ ...projectForm, target: e.target.value })} />
+          </label>
+          <label>LOI (min)
+            <input type="number" value={projectForm.loi} onChange={(e) => setProjectForm({ ...projectForm, loi: e.target.value })} />
+          </label>
+          <label>IR (%)
+            <input type="number" value={projectForm.ir} onChange={(e) => setProjectForm({ ...projectForm, ir: e.target.value })} />
+          </label>
+          <label>Launch Date
+            <input type="date" value={projectForm.launch_date} onChange={(e) => setProjectForm({ ...projectForm, launch_date: e.target.value })} />
+          </label>
+          <label>Survey Link (optional)
+            <input value={projectForm.survey_link} onChange={(e) => setProjectForm({ ...projectForm, survey_link: e.target.value })} placeholder="e.g. https://forms.gle/xxxxx" />
+          </label>
+          {projectMessage && <div className={projectMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{projectMessage.text}</div>}
+          <button className="btn-primary" type="submit" disabled={projectBusy}>{projectBusy ? 'Creating…' : 'Create Survey'}</button>
+        </form>
+      </div>
+      </Reveal>
+
       {projects.length === 0 && (
         <Reveal>
         <div className="card">
-          <p>No projects have been assigned to your account yet. Contact your account manager.</p>
+          <p>You haven't created any surveys yet. Use the form above to get started.</p>
         </div>
         </Reveal>
       )}
