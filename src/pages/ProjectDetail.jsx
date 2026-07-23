@@ -203,13 +203,14 @@ export default function ProjectDetail() {
       return
     }
 
-    const headers = ['UID', 'Start Time', 'End Time', 'Duration (min)', 'Country', 'Status']
+    const headers = ['UID', 'Start Time', 'End Time', 'Duration (min)', 'Country', 'IP Address', 'Status']
     const csvRows = data.map((r) => [
       r.uid,
       r.start_time ? new Date(r.start_time).toLocaleString() : '',
       r.end_time ? new Date(r.end_time).toLocaleString() : '',
       r.duration_min ?? '',
       r.country ?? '',
+      r.ip_address ?? '',
       r.status ?? '',
     ])
 
@@ -243,7 +244,7 @@ export default function ProjectDetail() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters = statusFilter || countryFilter || dateFrom || dateTo
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
-  const colCount = isAdmin ? 9 : 7
+  const colCount = isAdmin ? 10 : 8
   const clearUnlocked = clearConfirmText === projectId
 
   return (
@@ -379,6 +380,7 @@ export default function ProjectDetail() {
                 <th>End Time</th>
                 <th>Duration</th>
                 <th>Country</th>
+                <th>IP Address</th>
                 <th>Status</th>
                 {isAdmin && <th>Actions</th>}
               </tr>
@@ -402,6 +404,7 @@ export default function ProjectDetail() {
                   <td>{r.end_time ? new Date(r.end_time).toLocaleString() : '—'}</td>
                   <td>{r.duration_min != null ? `${r.duration_min} min` : '—'}</td>
                   <td>{r.country}</td>
+                  <td>{r.ip_address || '—'}</td>
                   <td><span className={`badge ${STATUS_CLASS[r.status]}`}>{r.status}</span></td>
                   {isAdmin && (
                     <td>
