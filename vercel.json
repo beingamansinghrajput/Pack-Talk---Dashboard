@@ -1,5 +1,11 @@
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cleanup-track-hits",
+      "schedule": "0 3 * * *"
+    }
   ]
 }
