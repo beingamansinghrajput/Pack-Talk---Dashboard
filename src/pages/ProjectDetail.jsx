@@ -51,6 +51,9 @@ export default function ProjectDetail() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
 
+  const [clearConfirmText, setClearConfirmText] = useState('')
+  const [clearBusy, setClearBusy] = useState(false)
+
   useEffect(() => {
     setPage(0)
   }, [statusFilter, countryFilter, dateFrom, dateTo])
@@ -161,6 +164,32 @@ export default function ProjectDetail() {
     }
   }
 
+  async function handleClearAllTestData() {
+    if (clearConfirmText !== projectId) return
+    const confirmed = window.confirm(
+      `This will remove ALL respondent rows for ${projectId} (every page, every filter — not just what's currently visible). This can be restored later by an admin if needed. Continue?`
+    )
+    if (!confirmed) return
+
+    setClearBusy(true)
+    const { error, count } = await supabase
+      .from('responses')
+      .update({ deleted: true })
+      .eq('project_id', projectId)
+      .eq('deleted', false)
+      .select('id', { count: 'exact' })
+
+    setClearBusy(false)
+    if (error) {
+      setActionMessage({ type: 'error', text: error.message })
+    } else {
+      setActionMessage({ type: 'success', text: `Cleared ${count ?? 'all'} respondent row(s) for ${projectId}.` })
+      setClearConfirmText('')
+      setSelectedIds(new Set())
+      load()
+    }
+  }
+
   async function handleExport() {
     const query = buildQuery(supabase.from('responses').select('*')).order('start_time', { ascending: false })
     const { data, error } = await query
@@ -215,6 +244,7 @@ export default function ProjectDetail() {
   const hasActiveFilters = statusFilter || countryFilter || dateFrom || dateTo
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const colCount = isAdmin ? 9 : 7
+  const clearUnlocked = clearConfirmText === projectId
 
   return (
     <div className="page">
@@ -395,6 +425,34 @@ export default function ProjectDetail() {
         </div>
       </div>
       </Reveal>
+
+      {isAdmin && (
+        <Reveal>
+        <div className="card" style={{ borderLeft: '3px solid #DC2626', marginTop: 20 }}>
+          <h2 className="card-title" style={{ color: '#f87171' }}>Danger Zone</h2>
+          <p className="card-hint">
+            Wipe every respondent row for <strong>{projectId}</strong> — not just this page, all of it, ignoring any filters above. Meant for clearing throwaway test data, not real respondents. This is a soft delete, so an admin can still restore it afterward if needed.
+          </p>
+          <label style={{ display: 'block', marginTop: 12, marginBottom: 8 }}>
+            Type <code>{projectId}</code> to unlock
+            <input
+              value={clearConfirmText}
+              onChange={(e) => setClearConfirmText(e.target.value)}
+              placeholder={projectId}
+              style={{ maxWidth: 240, marginTop: 6 }}
+            />
+          </label>
+          <button
+            className="btn-ghost"
+            onClick={handleClearAllTestData}
+            disabled={!clearUnlocked || clearBusy}
+            style={{ color: '#f87171', opacity: clearUnlocked ? 1 : 0.5 }}
+          >
+            {clearBusy ? 'Clearing…' : `Clear All Test Data for ${projectId}`}
+          </button>
+        </div>
+        </Reveal>
+      )}
     </div>
   )
 }
