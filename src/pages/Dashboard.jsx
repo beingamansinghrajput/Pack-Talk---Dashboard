@@ -206,7 +206,7 @@ export default function Dashboard() {
               {projectRows.map((p) => (
                 <tr key={p.project_id}>
                   <td>
-                    <Link className="link" to={`/projects/${p.project_id}`}>{p.project_id}</Link>
+                    <Link className="link" to={`/project/${p.project_id}`}>{p.project_id}</Link>
                     <div className="cell-sub">{p.project_name}</div>
                   </td>
                   <td>{p.country}</td>
