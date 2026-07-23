@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
@@ -34,6 +34,7 @@ function getIRHealth(expectedIR, completedCount, terminatedCount) {
 
 export default function ProjectDetail() {
   const { projectId } = useParams()
+  const navigate = useNavigate()
   const { isAdmin } = useAuth()
   const [project, setProject] = useState(null)
   const [rows, setRows] = useState([])
@@ -53,6 +54,9 @@ export default function ProjectDetail() {
 
   const [clearConfirmText, setClearConfirmText] = useState('')
   const [clearBusy, setClearBusy] = useState(false)
+
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   useEffect(() => {
     setPage(0)
@@ -190,6 +194,27 @@ export default function ProjectDetail() {
     }
   }
 
+  async function handleDeleteProject() {
+    if (deleteConfirmText !== projectId) return
+    const confirmed = window.confirm(
+      `This will PERMANENTLY DELETE the project ${projectId} itself — not just its respondent data. This cannot be undone from inside the app (an admin would need to recreate it from scratch in Supabase). Are you absolutely sure?`
+    )
+    if (!confirmed) return
+
+    setDeleteBusy(true)
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('project_id', projectId)
+
+    setDeleteBusy(false)
+    if (error) {
+      setActionMessage({ type: 'error', text: `Could not delete project: ${error.message}` })
+    } else {
+      navigate('/', { replace: true })
+    }
+  }
+
   async function handleExport() {
     const query = buildQuery(supabase.from('responses').select('*')).order('start_time', { ascending: false })
     const { data, error } = await query
@@ -246,6 +271,7 @@ export default function ProjectDetail() {
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
   const colCount = isAdmin ? 10 : 8
   const clearUnlocked = clearConfirmText === projectId
+  const deleteUnlocked = deleteConfirmText === projectId
 
   return (
     <div className="page">
@@ -452,6 +478,30 @@ export default function ProjectDetail() {
             style={{ color: '#f87171', opacity: clearUnlocked ? 1 : 0.5 }}
           >
             {clearBusy ? 'Clearing…' : `Clear All Test Data for ${projectId}`}
+          </button>
+
+          <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid rgba(220,38,38,0.3)' }} />
+
+          <h3 style={{ color: '#f87171', fontSize: 15, marginBottom: 4 }}>Delete This Project Permanently</h3>
+          <p className="card-hint">
+            Removes <strong>{projectId}</strong> itself from Manage Projects — not just its respondent data. This is <strong>not</strong> a soft delete and cannot be undone from inside the app. Only use this for throwaway test projects, never for a project with real client data.
+          </p>
+          <label style={{ display: 'block', marginTop: 12, marginBottom: 8 }}>
+            Type <code>{projectId}</code> to unlock
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={projectId}
+              style={{ maxWidth: 240, marginTop: 6 }}
+            />
+          </label>
+          <button
+            className="btn-ghost"
+            onClick={handleDeleteProject}
+            disabled={!deleteUnlocked || deleteBusy}
+            style={{ color: '#fff', background: '#DC2626', opacity: deleteUnlocked ? 1 : 0.5 }}
+          >
+            {deleteBusy ? 'Deleting…' : `Permanently Delete ${projectId}`}
           </button>
         </div>
         </Reveal>
