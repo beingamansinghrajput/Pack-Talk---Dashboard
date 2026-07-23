@@ -48,6 +48,8 @@ export default function ProjectDetail() {
   const [dateTo, setDateTo] = useState('')
 
   const [irCounts, setIrCounts] = useState({ Completed: 0, Terminated: 0, QuotaFull: 0, Disqualify: 0 })
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   useEffect(() => {
     setPage(0)
@@ -56,6 +58,10 @@ export default function ProjectDetail() {
   useEffect(() => {
     load()
   }, [projectId, page, statusFilter, countryFilter, dateFrom, dateTo])
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [page, statusFilter, countryFilter, dateFrom, dateTo, projectId])
 
   function buildQuery(base) {
     let q = base.eq('project_id', projectId).eq('deleted', false)
@@ -115,6 +121,46 @@ export default function ProjectDetail() {
     }
   }
 
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const allSelected = rows.length > 0 && rows.every((r) => prev.has(r.id))
+      if (allSelected) return new Set()
+      return new Set(rows.map((r) => r.id))
+    })
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    const confirmed = window.confirm(
+      `Remove ${selectedIds.size} selected respondent(s)? This can be restored later by an admin if needed.`
+    )
+    if (!confirmed) return
+
+    setBulkBusy(true)
+    const { error } = await supabase
+      .from('responses')
+      .update({ deleted: true })
+      .in('id', Array.from(selectedIds))
+
+    setBulkBusy(false)
+    if (error) {
+      setActionMessage({ type: 'error', text: error.message })
+    } else {
+      setActionMessage({ type: 'success', text: `${selectedIds.size} respondent(s) removed.` })
+      setSelectedIds(new Set())
+      load()
+    }
+  }
+
   async function handleExport() {
     const query = buildQuery(supabase.from('responses').select('*')).order('start_time', { ascending: false })
     const { data, error } = await query
@@ -167,6 +213,8 @@ export default function ProjectDetail() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters = statusFilter || countryFilter || dateFrom || dateTo
+  const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
+  const colCount = isAdmin ? 9 : 7
 
   return (
     <div className="page">
@@ -268,11 +316,33 @@ export default function ProjectDetail() {
 
       <Reveal>
       <div className="card">
-        <h2 className="card-title">Member Survey Overview</h2>
+        <div className="section-header-row">
+          <h2 className="card-title">Member Survey Overview</h2>
+          {isAdmin && selectedIds.size > 0 && (
+            <button
+              className="btn-ghost"
+              onClick={handleBulkDelete}
+              disabled={bulkBusy}
+              style={{ color: '#f87171' }}
+            >
+              {bulkBusy ? 'Removing…' : `Delete Selected (${selectedIds.size})`}
+            </button>
+          )}
+        </div>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
+                {isAdmin && (
+                  <th style={{ width: 32 }}>
+                    <input
+                      type="checkbox"
+                      checked={allOnPageSelected}
+                      onChange={toggleSelectAll}
+                      disabled={rows.length === 0}
+                    />
+                  </th>
+                )}
                 <th>#</th>
                 <th>UID</th>
                 <th>Start Time</th>
@@ -284,9 +354,18 @@ export default function ProjectDetail() {
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={isAdmin ? 8 : 7} className="empty-row">Loading…</td></tr>}
+              {loading && <tr><td colSpan={colCount} className="empty-row">Loading…</td></tr>}
               {!loading && rows.map((r, i) => (
                 <tr key={r.id}>
+                  {isAdmin && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(r.id)}
+                        onChange={() => toggleSelect(r.id)}
+                      />
+                    </td>
+                  )}
                   <td>{page * PAGE_SIZE + i + 1}</td>
                   <td>{r.uid}</td>
                   <td>{new Date(r.start_time).toLocaleString()}</td>
@@ -304,7 +383,7 @@ export default function ProjectDetail() {
                 </tr>
               ))}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={isAdmin ? 8 : 7} className="empty-row">No respondents match the current filters.</td></tr>
+                <tr><td colSpan={colCount} className="empty-row">No respondents match the current filters.</td></tr>
               )}
             </tbody>
           </table>
