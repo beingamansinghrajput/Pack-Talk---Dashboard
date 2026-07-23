@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
@@ -19,6 +19,7 @@ export default function ProjectsAdmin() {
   const [ratesProjectId, setRatesProjectId] = useState(null)
   const [linksProjectId, setLinksProjectId] = useState(null)
   const [copiedKey, setCopiedKey] = useState(null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -107,6 +108,14 @@ export default function ProjectsAdmin() {
     setTimeout(() => setCopiedKey(null), 1500)
   }
 
+  const filteredProjects = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return projects
+    return projects.filter((p) =>
+      `${p.project_id} ${p.project_name} ${p.country}`.toLowerCase().includes(q)
+    )
+  }, [projects, search])
+
   return (
     <div className="page">
       <h1>Manage Projects</h1>
@@ -148,14 +157,22 @@ export default function ProjectsAdmin() {
 
       <Reveal delay={80}>
       <div className="card">
-        <h2 className="card-title">All Projects</h2>
+        <div className="section-header-row">
+          <h2 className="card-title">All Projects</h2>
+          <input
+            className="search-input"
+            placeholder="Search by Project ID, name, or country…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr><th>Project ID</th><th>Name</th><th>Country</th><th>Target</th><th>Status</th><th>Teams with Access</th><th></th></tr>
             </thead>
             <tbody>
-              {projects.map((p) => {
+              {filteredProjects.map((p) => {
                 const linkedTeamIds = teamProjects.filter((tp) => tp.project_id === p.project_id).map((tp) => tp.team_id)
                 return (
                   <tr key={p.project_id}>
@@ -205,6 +222,9 @@ export default function ProjectsAdmin() {
                   </tr>
                 )
               })}
+              {filteredProjects.length === 0 && (
+                <tr><td colSpan={7} className="empty-row">No projects match your search.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
