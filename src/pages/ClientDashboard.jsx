@@ -336,7 +336,7 @@ export default function ClientDashboard() {
               <div className="kpi-mini"><span className="kpi-num">{stats.quotaFull}</span><span className="kpi-label">Quota Full</span></div>
             </div>
 
-            {quotaRows.length > 0 && (
+            {quotaRows.length > 0 ? (
               <>
                 <h3 style={{ fontSize: 15, marginBottom: 8 }}>Quota Progress</h3>
                 <div className="table-wrap" style={{ marginBottom: 16 }}>
@@ -359,6 +359,13 @@ export default function ClientDashboard() {
                   </table>
                 </div>
               </>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 15, marginBottom: 6 }}>Quota Progress</h3>
+                <p className="card-hint">
+                  No quota data yet for this survey. Upload a quota brief in the "Upload Quota Brief" section below to start tracking Done vs To Go by country and age band.
+                </p>
+              </div>
             )}
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
