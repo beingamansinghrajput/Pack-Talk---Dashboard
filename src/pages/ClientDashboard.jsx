@@ -108,6 +108,21 @@ export default function ClientDashboard() {
     setTimeout(() => setCopiedKey(null), 1500)
   }
 
+  function copyAllLinks(project_id) {
+    const links = getTrackingLinks(project_id)
+    const formatted = [
+      `PackTalk Tracking Links — ${project_id}`,
+      '',
+      ...links.map((l) => `${l.label}: ${l.url}`),
+      '',
+      'Replace [UID], [COUNTRY], and [AGE_BAND] with your survey tool\'s dynamic variables. Country and Age Band are optional.',
+    ].join('\n')
+
+    navigator.clipboard.writeText(formatted)
+    setCopiedKey(project_id + '_all')
+    setTimeout(() => setCopiedKey(null), 1500)
+  }
+
   function statFor(project_id) {
     const rows = responses.filter((r) => r.project_id === project_id)
     return {
@@ -346,7 +361,12 @@ export default function ClientDashboard() {
               </>
             )}
 
-            <h3 style={{ fontSize: 15, marginBottom: 8 }}>Tracking Links</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <h3 style={{ fontSize: 15, margin: 0 }}>Tracking Links</h3>
+              <button type="button" className="btn-ghost" onClick={() => copyAllLinks(p.project_id)}>
+                {copiedKey === (p.project_id + '_all') ? 'Copied All ✓' : 'Copy All Links'}
+              </button>
+            </div>
             <p className="card-hint">
               Paste these into your survey tool's redirect/thank-you-page settings, replacing <code>[UID]</code>, <code>[COUNTRY]</code>, and <code>[AGE_BAND]</code> with your tool's variables. Country and age band are optional but power the Quota Progress table above.
             </p>
