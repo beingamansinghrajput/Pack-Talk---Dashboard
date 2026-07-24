@@ -102,9 +102,11 @@ export default function Team() {
     <div className="page">
       <h1>Team</h1>
       <p className="page-sub">
-        Everyone who has logged in at least once appears here automatically. To add a new TL,
+        Everyone who has logged in at least once appears here automatically. To add a new team member,
         create their login in Supabase → Authentication → Users → Add User; they'll show up
-        here the first time they sign in.
+        here the first time they sign in. Set their role to <strong>Survey Analyst</strong> for regular
+        employees (they'll only see the Dashboard), or <strong>Team Lead</strong> for someone who should
+        also access Punch In Data and Earnings.
       </p>
 
       {isAdmin && (
@@ -154,7 +156,7 @@ export default function Team() {
                   <td>
                     {isAdmin ? (
                       <select value={m.role} onChange={(e) => changeRole(m.id, e.target.value)}>
-                        <option value="tl">TL</option>
+                        <option value="tl">Survey Analyst</option>
                         <option value="team_lead">Team Lead</option>
                         <option value="admin">Admin</option>
                       </select>
