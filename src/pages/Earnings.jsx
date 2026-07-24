@@ -75,6 +75,22 @@ export default function Earnings() {
     return members.filter((m) => m.role !== 'admin' && !m.uid_prefix)
   }, [members, canManageTeam])
 
+  const teammateStats = useMemo(() => {
+    if (canManageTeam) return []
+    if (!profile?.team_id) return []
+    return members
+      .filter((m) => m.team_id === profile.team_id && m.id !== profile.id && m.role !== 'admin' && m.uid_prefix)
+      .map((m) => {
+        const completedCount = responses.filter((r) => extractPrefix(r.uid) === m.uid_prefix).length
+        return { member: m, completedCount }
+      })
+  }, [members, responses, canManageTeam, profile])
+
+  const myTeamName = useMemo(() => {
+    if (!profile?.team_id) return null
+    return teams.find((t) => t.id === profile.team_id)?.name || null
+  }, [teams, profile])
+
   if (loading) return <div className="page-loading">Loading earnings…</div>
 
   return (
@@ -83,7 +99,7 @@ export default function Earnings() {
       <p className="page-sub">
         {canManageTeam
           ? 'Completed respondents (matched by UID code) × pay rate, per person, per project.'
-          : 'Your completed respondents and earnings across all projects.'}
+          : 'Your completed respondents and earnings, plus completion counts for your team.'}
       </p>
 
       {!isAdmin && !canManageTeam && !profile?.uid_prefix && (
@@ -154,6 +170,44 @@ export default function Earnings() {
           </div>
         </Reveal>
       ))}
+
+      {!canManageTeam && profile?.team_id && (
+        <Reveal delay={80}>
+          <div className="card">
+            <h2 className="card-title">Team Activity{myTeamName ? ` — ${myTeamName}` : ''}</h2>
+            <p className="card-hint">
+              Completed respondent counts for your teammates. Pay amounts are private to each person.
+            </p>
+            {teammateStats.length === 0 ? (
+              <p className="card-hint" style={{ marginTop: 8 }}>No other teammates with a UID code yet.</p>
+            ) : (
+              <div className="table-wrap" style={{ marginTop: 12 }}>
+                <table className="data-table small">
+                  <thead>
+                    <tr><th>Name</th><th>Completed</th></tr>
+                  </thead>
+                  <tbody>
+                    {teammateStats.map(({ member, completedCount }) => (
+                      <tr key={member.id}>
+                        <td>{member.full_name || member.email} <span className="card-hint">({member.uid_prefix})</span></td>
+                        <td>{completedCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </Reveal>
+      )}
+
+      {!canManageTeam && !profile?.team_id && (
+        <Reveal delay={80}>
+          <div className="auth-error">
+            You're not assigned to a team yet, so team activity can't be shown. Ask your admin to add you to a team.
+          </div>
+        </Reveal>
+      )}
     </div>
   )
 }
