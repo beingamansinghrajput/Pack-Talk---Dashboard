@@ -8,7 +8,7 @@ create table if not exists profiles (
   id uuid references auth.users(id) primary key,
   email text not null,
   full_name text,
-  role text not null default 'tl' check (role in ('admin', 'tl')),
+  role text not null default 'tl' check (role in ('admin', 'team_lead', 'tl', 'client')),
   created_at timestamptz default now()
 );
 
