@@ -17,6 +17,16 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function AdminRoute({ children }) {
+  const { isAdmin } = useAuth()
+  return isAdmin ? children : <Navigate to="/" replace />
+}
+
+function OpsRoute({ children }) {
+  const { canAccessOpsPages } = useAuth()
+  return canAccessOpsPages ? children : <Navigate to="/" replace />
+}
+
 function HomeRoute() {
   const { isClient } = useAuth()
   return isClient ? <ClientDashboard /> : <Dashboard />
@@ -55,7 +65,9 @@ function AppRoutes() {
           path="/projects"
           element={
             <ProtectedRoute>
-              <ProjectsAdmin />
+              <AdminRoute>
+                <ProjectsAdmin />
+              </AdminRoute>
             </ProtectedRoute>
           }
         />
@@ -63,7 +75,9 @@ function AppRoutes() {
           path="/team"
           element={
             <ProtectedRoute>
-              <Team />
+              <AdminRoute>
+                <Team />
+              </AdminRoute>
             </ProtectedRoute>
           }
         />
@@ -71,7 +85,9 @@ function AppRoutes() {
           path="/upload"
           element={
             <ProtectedRoute>
-              <Upload />
+              <OpsRoute>
+                <Upload />
+              </OpsRoute>
             </ProtectedRoute>
           }
         />
@@ -79,7 +95,9 @@ function AppRoutes() {
           path="/earnings"
           element={
             <ProtectedRoute>
-              <Earnings />
+              <OpsRoute>
+                <Earnings />
+              </OpsRoute>
             </ProtectedRoute>
           }
         />
