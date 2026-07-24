@@ -95,9 +95,7 @@ function AppRoutes() {
           path="/earnings"
           element={
             <ProtectedRoute>
-              <OpsRoute>
-                <Earnings />
-              </OpsRoute>
+              <Earnings />
             </ProtectedRoute>
           }
         />
