@@ -38,9 +38,7 @@ export default function Navbar() {
         {canAccessOpsPages && (
           <Link className={isActive('/upload') ? 'active' : ''} to="/upload">Punch In Data</Link>
         )}
-        {canAccessOpsPages && (
-          <Link className={isActive('/earnings') ? 'active' : ''} to="/earnings">Earnings</Link>
-        )}
+        <Link className={isActive('/earnings') ? 'active' : ''} to="/earnings">Earnings</Link>
         {isAdmin && (
           <Link className={isActive('/projects') ? 'active' : ''} to="/projects">Manage Projects</Link>
         )}
