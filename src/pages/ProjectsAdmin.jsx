@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import Reveal from '../components/Reveal'
@@ -21,6 +22,13 @@ export default function ProjectsAdmin() {
   const [copiedKey, setCopiedKey] = useState(null)
   const [search, setSearch] = useState('')
 
+  const [quotaFile, setQuotaFile] = useState(null)
+  const [quotaPreview, setQuotaPreview] = useState([])
+  const [quotaError, setQuotaError] = useState(null)
+  const [quotaProjectId, setQuotaProjectId] = useState('')
+  const [quotaMessage, setQuotaMessage] = useState(null)
+  const [quotaBusy, setQuotaBusy] = useState(false)
+
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -36,6 +44,9 @@ export default function ProjectsAdmin() {
     setTeamProjects(tpData || [])
     setMembers(memberData || [])
     setRates(rateData || [])
+    if (!quotaProjectId && projectData && projectData.length > 0) {
+      setQuotaProjectId(projectData[0].project_id)
+    }
   }
 
   async function handleSubmit(e) {
@@ -106,6 +117,128 @@ export default function ProjectsAdmin() {
     navigator.clipboard.writeText(url)
     setCopiedKey(key)
     setTimeout(() => setCopiedKey(null), 1500)
+  }
+
+  function handleQuotaFile(e) {
+    const f = e.target.files[0]
+    setQuotaError(null)
+    setQuotaPreview([])
+    if (!f) return
+
+    const validExtensions = ['.xlsx', '.xls', '.csv']
+    const hasValidExtension = validExtensions.some((ext) => f.name.toLowerCase().endsWith(ext))
+    if (!hasValidExtension) {
+      setQuotaError('Unsupported file type. Please upload a .xlsx, .xls, or .csv file.')
+      setQuotaFile(null)
+      return
+    }
+
+    setQuotaFile(f)
+    const reader = new FileReader()
+    reader.onerror = () => {
+      setQuotaError('Could not read this file. Try re-exporting it and uploading again.')
+      setQuotaFile(null)
+    }
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+        if (json.length === 0) {
+          setQuotaError('This file has no data rows.')
+          setQuotaFile(null)
+          return
+        }
+
+        const firstRow = json[0]
+        const hasCountry = 'Country' in firstRow
+        const hasAgeBand = 'Age Band' in firstRow
+        const hasTarget = 'Target Count' in firstRow
+        if (!hasCountry || !hasAgeBand || !hasTarget) {
+          setQuotaError('Missing required columns. File must include: Country, Age Band, Target Count, Survey URL.')
+          setQuotaFile(null)
+          return
+        }
+
+        setQuotaPreview(json.slice(0, 5))
+      } catch (err) {
+        setQuotaError('Could not parse this file. Make sure it is a valid Excel or CSV file.')
+        setQuotaFile(null)
+      }
+    }
+    reader.readAsBinaryString(f)
+  }
+
+  async function handleQuotaUpload() {
+    if (!quotaFile || !quotaProjectId) {
+      setQuotaMessage({ type: 'error', text: 'Pick a project and a file first.' })
+      return
+    }
+    setQuotaBusy(true)
+    setQuotaMessage(null)
+
+    const reader = new FileReader()
+    reader.onerror = () => {
+      setQuotaBusy(false)
+      setQuotaMessage({ type: 'error', text: 'Could not read the file during upload.' })
+    }
+    reader.onload = async (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+        const payload = []
+        const invalidRows = []
+
+        json.forEach((row, idx) => {
+          const country = String(row.Country || '').trim()
+          const ageBand = String(row['Age Band'] || '').trim()
+          const targetCount = Number(row['Target Count'])
+          const surveyUrl = String(row['Survey URL'] || '').trim()
+          const rowNum = idx + 2
+
+          if (!country || !ageBand || isNaN(targetCount)) {
+            invalidRows.push(`Row ${rowNum}: missing Country, Age Band, or a valid Target Count`)
+            return
+          }
+
+          payload.push({
+            project_id: quotaProjectId,
+            country,
+            age_band: ageBand,
+            target_count: targetCount,
+            survey_url: surveyUrl || null,
+          })
+        })
+
+        if (payload.length === 0) {
+          setQuotaMessage({ type: 'error', text: `No valid rows found. ${invalidRows.slice(0, 3).join('; ')}` })
+          setQuotaBusy(false)
+          return
+        }
+
+        const { error } = await supabase
+          .from('project_quotas')
+          .upsert(payload, { onConflict: 'project_id,country,age_band' })
+
+        setQuotaBusy(false)
+        if (error) {
+          setQuotaMessage({ type: 'error', text: error.message })
+        } else {
+          let text = `${payload.length} quota row(s) saved for ${quotaProjectId}.`
+          if (invalidRows.length > 0) text += ` (${invalidRows.length} row(s) skipped.)`
+          setQuotaMessage({ type: 'success', text })
+          setQuotaFile(null)
+          setQuotaPreview([])
+        }
+      } catch (err) {
+        setQuotaBusy(false)
+        setQuotaMessage({ type: 'error', text: 'Could not process this file.' })
+      }
+    }
+    reader.readAsBinaryString(quotaFile)
   }
 
   const filteredProjects = useMemo(() => {
@@ -307,6 +440,50 @@ export default function ProjectsAdmin() {
         )}
       </div>
       </Reveal>
+
+      {projects.length > 0 && (
+        <Reveal delay={120}>
+        <div className="card" style={{ maxWidth: 640 }}>
+          <h2 className="card-title">Upload Quota Brief</h2>
+          <p className="card-hint">
+            Set quotas for any project yourself — no need to wait on a client. Upload an Excel/CSV file with columns: <code>Country, Age Band, Target Count, Survey URL</code>. One row per country + age band. Re-uploading updates existing rows for the same country/age band.
+          </p>
+          <label className="field-label">Project
+            <select value={quotaProjectId} onChange={(e) => setQuotaProjectId(e.target.value)}>
+              {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_name} ({p.project_id})</option>)}
+            </select>
+          </label>
+          <label className="field-label">Quota File (.xlsx / .csv)
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleQuotaFile} />
+          </label>
+
+          {quotaError && <div className="auth-error" style={{ marginTop: 8 }}>{quotaError}</div>}
+
+          {quotaPreview.length > 0 && (
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table className="data-table small">
+                <thead>
+                  <tr>{Object.keys(quotaPreview[0]).map((k) => <th key={k}>{k}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {quotaPreview.map((row, i) => (
+                    <tr key={i}>{Object.values(row).map((v, j) => <td key={j}>{String(v)}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="card-hint">Showing first {quotaPreview.length} rows as a preview.</p>
+            </div>
+          )}
+
+          {quotaMessage && (
+            <div className={quotaMessage.type === 'error' ? 'auth-error' : 'auth-success'}>{quotaMessage.text}</div>
+          )}
+          <button className="btn-primary" onClick={handleQuotaUpload} disabled={quotaBusy || !quotaFile} style={{ marginTop: 12 }}>
+            {quotaBusy ? 'Uploading…' : 'Upload Quota File'}
+          </button>
+        </div>
+        </Reveal>
+      )}
     </div>
   )
 }
