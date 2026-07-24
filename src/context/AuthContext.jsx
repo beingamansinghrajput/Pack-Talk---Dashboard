@@ -1,5 +1,13 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+
+const ROLE_LABELS = {
+  admin: 'Admin',
+  team_lead: 'Team Lead',
+  tl: 'Survey Analyst',
+  client: 'Client',
+}
+
 const AuthContext = createContext()
 export function useAuth() {
   return useContext(AuthContext)
@@ -51,6 +59,8 @@ export function AuthProvider({ children }) {
   const isTeamLead = profile?.role === 'team_lead'
   const isClient = profile?.role === 'client'
   const canManageTeam = isAdmin || isTeamLead
+  const canAccessOpsPages = isAdmin || isTeamLead
+  const roleLabel = ROLE_LABELS[profile?.role] || profile?.role
   const value = {
     session,
     user: session?.user ?? null,
@@ -59,6 +69,8 @@ export function AuthProvider({ children }) {
     isTeamLead,
     isClient,
     canManageTeam,
+    canAccessOpsPages,
+    roleLabel,
     loading,
     signOut,
     refreshProfile,
